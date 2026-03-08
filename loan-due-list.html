@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন বাকি তালিকা - অ্যাডমিন প্যানেল</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --red: #e74c3c;
+            --green: #27ae60;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #333; }
+
+        .page-header {
+            background: #fff; padding: 15px 20px; display: flex; align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 1000;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; margin-right: 15px; cursor: pointer; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* Search Bar */
+        .search-container { padding: 20px; max-width: 600px; margin: auto; }
+        .search-box {
+            display: flex; align-items: center; background: white; padding: 12px 15px;
+            border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 2px solid var(--gold);
+        }
+        .search-box input { flex: 1; border: none; outline: none; padding: 0 10px; font-size: 15px; }
+        .search-box i { color: var(--gold); }
+
+        /* List container */
+        .list-container { padding: 0 15px 50px 15px; max-width: 800px; margin: auto; }
+        
+        /* Member Card */
+        .member-loan-card {
+            background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px;
+            display: flex; align-items: center; gap: 15px; border-left: 5px solid var(--red);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s;
+        }
+        .m-img { width: 55px; height: 55px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; }
+        .m-info { flex: 1; }
+        .m-info h4 { font-size: 15px; color: var(--dark); margin-bottom: 2px; }
+        .m-info p { font-size: 11px; color: #777; font-weight: 600; }
+        .loan-stats { margin-top: 5px; display: flex; gap: 15px; font-size: 12px; }
+        .due-amt { color: var(--red); font-weight: 800; }
+
+        .btn-detail {
+            background: var(--dark); color: white; border: none; padding: 8px 15px;
+            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+        }
+
+        /* ================= Full Page Modal ================= */
+        .full-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 2000; overflow-y: auto; animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .modal-nav {
+            padding: 15px 20px; background: var(--dark); color: white;
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 2100;
+        }
+
+        /* Modal Report Content */
+        .report-content { padding: 15px; max-width: 900px; margin: auto; }
+        .header-card {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px; border: 2px solid var(--gold); border-radius: 20px;
+            background: #fffdf5; margin-bottom: 20px; gap: 10px;
+        }
+        .f-logo { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--gold); }
+        .id-tag { background: var(--dark); color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
+        .m-photo-sm { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--gold); }
+
+        .sum-row { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
+        .sum-box { flex: 1; background: #fdfaf0; border: 1px solid var(--gold); border-radius: 12px; padding: 10px; text-align: center; }
+        .sum-box p { font-size: 10px; color: #777; margin-bottom: 3px; font-weight: bold; }
+        .sum-box h3 { font-size: 14px; color: var(--dark); font-weight: 800; }
+
+        /* Table */
+        .table-box { width: 100%; overflow-x: hidden; }
+        .statement-table { width: 100%; border-collapse: collapse; }
+        .statement-table th { background: #f1f1f1; padding: 10px 2px; font-size: 11px; text-align: center; border-bottom: 2px solid #ddd; }
+        .statement-table td { padding: 10px 2px; font-size: 11px; border-bottom: 1px solid #eee; text-align: center; }
+        
+        .status-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+        .paid { background: #e8f5e9; color: #2e7d32; }
+        .pending { background: #fff3cd; color: #856404; }
+
+        .loader { text-align: center; padding: 50px; color: var(--gold); }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">লোন বকেয়া তালিকা (সদস্য অনুযায়ী)</div>
+    </div>
+
+    <!-- Search -->
+    <div class="search-container">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" onkeyup="filterList()" placeholder="সদস্য নাম বা আইডি দিয়ে খুঁজুন...">
+        </div>
+    </div>
+
+    <!-- List Area -->
+    <div class="list-container" id="due-list-area">
+        <div class="loader"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><br>লোড হচ্ছে...</div>
+    </div>
+
+    <!-- ================= FULL PAGE MODAL ================= -->
+    <div id="detailModal" class="full-modal">
+        <div class="modal-nav">
+            <i class="fa-solid fa-xmark" style="font-size:24px; cursor:pointer;" onclick="closeModal()"></i>
+            <span style="font-weight:bold;">লোন পরিশোধের সময়সূচী</span>
+            <span></span>
+        </div>
+
+        <div class="report-content" id="modal-content">
+            <!-- Dynamic Data Load Here -->
+        </div>
+    </div>
+
+    <script>
+        // ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let allDueMembers = [];
+
+        // ১. বকেয়া লোন আছে এমন সদস্য তালিকা লোড
+        function loadDueList() {
+            db.collection('users').where('loanDue', '>', 0).onSnapshot(snap => {
+                const area = document.getElementById('due-list-area');
+                if (snap.empty) {
+                    area.innerHTML = '<p style="text-align:center; padding:50px; color:#999;">কোনো সদস্যের লোন বকেয়া নেই।</p>';
+                    return;
+                }
+
+                allDueMembers = [];
+                let html = '';
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    d.uid = doc.id;
+                    allDueMembers.push(d);
+
+                    html += `
+                        <div class="member-loan-card">
+                            <img src="${d.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png'}" class="m-img">
+                            <div class="m-info">
+                                <h4>${d.fullName}</h4>
+                                <p>ID: ${d.memberId} | <i class="fa-solid fa-phone"></i> ${d.phone}</p>
+                                <div class="loan-stats">
+                                    <span>অনুমোদিত: ৳ ${d.loanRepaid + d.loanDue}</span>
+                                    <span class="due-amt">বকেয়া: ৳ ${d.loanDue}</span>
+                                </div>
+                            </div>
+                            <button class="btn-detail" onclick="openDetails('${d.uid}')">বিস্তারিত</button>
+                        </div>
+                    `;
+                });
+                area.innerHTML = html;
+            });
+        }
+
+        // ২. বিস্তারিত পপআপ (সদস্য প্যানেল স্টাইল)
+        async function openDetails(uid) {
+            const member = allDueMembers.find(m => m.uid === uid);
+            document.getElementById('detailModal').style.display = 'block';
+            const modalBody = document.getElementById('modal-content');
+            modalBody.innerHTML = '<p style="text-align:center;">হিসাব তৈরি হচ্ছে...</p>';
+
+            try {
+                // লোন ডাটা ও ট্রানজেকশন আনা
+                const loanSnap = await db.collection('loan_applications').where('uid', '==', uid).where('status', '==', 'approved').get();
+                const txSnap = await db.collection('loan_transactions').where('uid', '==', uid).where('type', '==', 'repayment').get();
+                
+                let loans = [];
+                loanSnap.forEach(d => loans.push(d.data()));
+                loans.sort((a,b) => b.timestamp - a.timestamp);
+                const loan = loans[0];
+                const paidCount = txSnap.size;
+
+                // ক্যালকুলেশন
+                const amount = Number(loan.loanAmount);
+                const months = Number(loan.durationMonths);
+                const rule = loan.repaymentRule;
+                const totalInterest = (amount * Number(loan.interestRate) / 100) * (months / 12);
+                const totalRepayable = amount + totalInterest;
+
+                let totalInstCount = months;
+                let dayGap = 30;
+                if (rule === "সাপ্তাহিক") { totalInstCount = months * 4; dayGap = 7; }
+                else if (rule === "দৈনিক") { totalInstCount = months * 30; dayGap = 1; }
+
+                const perInst = (totalRepayable / totalInstCount) + Number(loan.savingsPerInst || 0);
+
+                // টেবিল জেনারেট
+                let tableHtml = '';
+                const startDate = loan.timestamp ? loan.timestamp.toDate() : new Date();
+                for (let i = 1; i <= totalInstCount; i++) {
+                    const instDate = new Date(startDate);
+                    instDate.setDate(startDate.getDate() + (i * dayGap));
+                    const statusText = i <= paidCount ? 'পরিশোধিত' : 'অপেক্ষমান';
+                    const statusClass = i <= paidCount ? 'paid' : 'pending';
+
+                    tableHtml += `
+                        <tr>
+                            <td>${i}</td>
+                            <td>${instDate.toLocaleDateString('bn-BD')}</td>
+                            <td>${rule} কিস্তি</td>
+                            <td>৳ ${perInst.toFixed(2)}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        </tr>
+                    `;
+                }
+
+                modalBody.innerHTML = `
+                    <div class="header-card">
+                        <div class="f-side"><img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" class="f-logo"><div><h2 style="font-size:15px; color:var(--gold-dark);">সোনালী ফাউন্ডেশন</h2></div></div>
+                        <div class="mid-id"><div class="id-tag">${member.memberId}</div></div>
+                        <div class="m-side"><img src="${member.photoUrl}" class="m-photo-sm"></div>
+                    </div>
+                    <div class="sum-row">
+                        <div class="sum-box"><p>মোট লোন</p><h3>৳ ${totalRepayable.toFixed(0)}</h3></div>
+                        <div class="sum-box"><p>পরিশোধিত</p><h3 style="color:var(--green);">৳ ${member.loanRepaid.toFixed(0)}</h3></div>
+                        <div class="sum-box"><p>বাকি লোন</p><h3 style="color:var(--red);">৳ ${member.loanDue.toFixed(0)}</h3></div>
+                    </div>
+                    <div class="table-box">
+                        <table class="statement-table">
+                            <thead><tr><th>নং</th><th>তারিখ</th><th>বিবরণ</th><th>টাকা</th><th>অবস্থা</th></tr></thead>
+                            <tbody>${tableHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) { modalBody.innerHTML = 'ত্রুটি: লোন ডাটা পাওয়া যায়নি।'; }
+        }
+
+        function filterList() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.getElementsByClassName('member-loan-card');
+            for (let card of cards) {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(query) ? 'flex' : 'none';
+            }
+        }
+
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+        loadDueList();
+    </script>
+</body>
+</html>

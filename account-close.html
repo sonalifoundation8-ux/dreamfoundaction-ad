@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>একাউন্ট ক্লোজ - অ্যাডমিন প্যানেল</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Image Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --gold-dark: #b8860b; --dark: #1a252f; --bg: #f4f7f6; --red: #e74c3c; --green: #27ae60; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        .page-header { background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+        .card { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 5px solid var(--gold); }
+        
+        .search-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 14px; background: #fafafa; }
+        .btn-main { padding: 12px 20px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; background: var(--dark); transition: 0.3s; }
+
+        #member-card { display: none; text-align: center; animation: fadeIn 0.5s; }
+        .m-img { width: 90px; height: 90px; border-radius: 50%; border: 3px solid var(--gold); object-fit: cover; margin-bottom: 15px; }
+        .m-name { font-size: 20px; font-weight: bold; color: var(--dark); }
+        .bal-box { background: #fff5f5; padding: 15px; border-radius: 12px; border: 1px solid #ffcccc; margin: 15px 0; }
+        
+        .btn-delete { width: 100%; padding: 15px; background: var(--red); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-delete:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* OTP Modal */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; width: 90%; max-width: 400px; border-radius: 20px; text-align: center; }
+        .otp-input { letter-spacing: 10px; font-size: 24px; text-align: center; font-weight: bold; margin: 20px 0; border: 2px solid var(--gold) !important; color: var(--gold-dark); outline: none; }
+
+        /* Closure Form */
+        #closure-form-section { display: none; padding: 10px; }
+        .closure-paper { background: white; border: 2px solid #000; padding: 40px; border-radius: 5px; position: relative; line-height: 1.8; }
+        .watermark { position: absolute; top: 35%; left: 10%; font-size: 45px; color: rgba(0,0,0,0.05); transform: rotate(-30deg); font-weight: bold; pointer-events: none; }
+
+        @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div style="font-weight:bold;">একাউন্ট ক্লোজ (Wipe Out)</div>
+    </div>
+
+    <div class="container" id="main-ui">
+        <div class="card">
+            <div class="search-group">
+                <input type="text" id="memberIdInput" class="form-control" placeholder="সদস্য ID (যেমন: SF-001)">
+                <button class="btn-main" onclick="searchMember()"><i class="fa-solid fa-search"></i></button>
+            </div>
+
+            <div id="member-card">
+                <img src="" id="m-img" class="m-img">
+                <h4 id="m-name">---</h4>
+                <p id="m-id" style="color:var(--gold-dark); font-weight:bold;">---</p>
+                
+                <div class="bal-box">
+                    <p style="font-size: 12px; color: #777;">বর্তমান ব্যালেন্স</p>
+                    <h3 id="m-balance" style="color:var(--red);">৳ ০.০০</h3>
+                </div>
+
+                <button class="btn-delete" id="delete-btn" onclick="initiateAccountClosure()">একাউন্ট ক্লোজ শুরু করুন</button>
+                <p id="warning-msg" style="color:red; font-size: 11px; margin-top: 10px; display: none;">* ব্যালেন্স ০.০০ না হওয়া পর্যন্ত ক্লোজ করা যাবে না।</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTP Modal (উত্তোলন সিস্টেমের মতো) -->
+    <div id="otp-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="color: #2c3e50;">নিরাপত্তা যাচাই</h3>
+            <p style="font-size: 14px; color: #666; margin-bottom: 15px;">
+                সদস্যের প্যানেলে একটি ক্লোজিং কোড পাঠানো হয়েছে। কোডটি সংগ্রহ করে নিচে বসান।
+            </p>
+            <input type="text" id="otp-input" class="form-control otp-input" maxlength="6" placeholder="000000">
+            <button class="btn-main" style="width: 100%; background: var(--green);" onclick="verifyAndWipeOut()">যাচাই ও ডিলিট করুন</button>
+            <p onclick="closeModal()" style="margin-top: 15px; color:red; cursor:pointer; font-size:13px;">বাতিল</p>
+        </div>
+    </div>
+
+    <!-- Final Document View -->
+    <div class="container" id="closure-form-section">
+        <div class="closure-paper" id="closure-document">
+            <div class="watermark">ACCOUNT CLOSED</div>
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 25px;">
+                <h2 id="org-title" style="text-transform: uppercase;">সোনালী ফাউন্ডেশন</h2>
+                <p>একাউন্ট ক্লোজিং ও চূড়ান্ত নিষ্পত্তি ফরম</p>
+            </div>
+            <div id="closure-text" style="font-size: 14px;"></div>
+            <div style="margin-top: 60px; display: flex; justify-content: space-between; text-align: center;">
+                <div style="width: 40%; border-top: 1px solid #000; padding-top: 5px;">ম্যানেজারের স্বাক্ষর</div>
+                <div style="width: 40%; border-top: 1px solid #000; padding-top: 5px;">সদস্যের স্বাক্ষর</div>
+            </div>
+            <p style="text-align: center; margin-top: 40px; font-size: 11px; color: #777;">তারিখ: <span id="close-date"></span></p>
+        </div>
+        <button class="btn-main" style="width:100%; margin-top:20px; background: var(--gold);" onclick="downloadImage()"><i class="fa-solid fa-image"></i> ফরম ডাউনলোড (JPG)</button>
+    </div>
+
+    <script>
+        // আপনার অরিজিনাল Firebase Config এখানে দিন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let targetUser = null;
+        let serverOtp = null;
+
+        async function searchMember() {
+            const id = document.getElementById('memberIdInput').value.trim().toUpperCase();
+            if(!id) return alert("ID দিন!");
+            const snap = await db.collection('users').where('memberId', '==', id).get();
+            if(snap.empty) return alert("সদস্য পাওয়া যায়নি!");
+            targetUser = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            const bal = Number(targetUser.balance || 0);
+            document.getElementById('m-img').src = targetUser.photoUrl || '';
+            document.getElementById('m-name').innerText = targetUser.fullName;
+            document.getElementById('m-id').innerText = "Member ID: " + targetUser.memberId;
+            document.getElementById('m-balance').innerText = "৳ " + bal.toFixed(2);
+            document.getElementById('member-card').style.display = 'block';
+            document.getElementById('delete-btn').disabled = (bal > 0);
+            document.getElementById('warning-msg').style.display = (bal > 0 ? 'block' : 'none');
+        }
+
+        // ================= নোটিফিকেশন লজিক (উত্তোলন প্যানেলের মতো ফিক্সড) =================
+        async function initiateAccountClosure() {
+            if(!confirm("আপনি কি এই সদস্যের একাউন্ট ক্লোজিং কোড পাঠাতে চান?")) return;
+            
+            const otp = Math.floor(100000 + Math.random() * 900000);
+            serverOtp = otp.toString();
+            const date = new Date().toLocaleDateString('bn-BD');
+
+            try {
+                // হুবহু উত্তোলনের মতো 'notifications' কালেকশনে পাঠানো
+                await db.collection('notifications').add({
+                    receiverUid: targetUser.id,
+                    message: `তারিখ: ${date}। আপনার একাউন্ট ক্লোজ করার সিক্রেট কোড: ${otp}। এটি কাউকে দিবেন না।`,
+                    type: 'otp', // উত্তোলনের মতো 'otp' টাইপ
+                    code: otp,
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    isRead: false
+                });
+
+                document.getElementById('otp-modal').style.display = 'flex';
+                alert("সদস্যের প্যানেলে ক্লোজিং কোড পাঠানো হয়েছে!");
+            } catch (e) { alert("Error: " + e.message); }
+        }
+
+        // চূড়ান্ত ডিলিট লজিক
+        async function verifyAndWipeOut() {
+            const inputOtp = document.getElementById('otp-input').value;
+            if(inputOtp !== serverOtp) return alert("❌ ভুল কোড! সঠিক কোড দিন।");
+
+            if(!confirm("চূড়ান্ত সতর্কতা! সদস্যের সকল তথ্য চিরতরে মুছে যাবে। আপনি কি নিশ্চিত?")) return;
+
+            const uid = targetUser.id;
+            try {
+                prepareDoc();
+                const collections = ['transactions', 'loan_transactions', 'deposits', 'withdrawals', 'loan_repayments', 'loan_applications', 'notifications'];
+                for (let col of collections) {
+                    const snap = await db.collection(col).where(col === 'notifications' ? 'receiverUid' : 'uid', '==', uid).get();
+                    const batch = db.batch();
+                    snap.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
+                await db.collection('users').doc(uid).delete();
+                alert("সাফল্য! একাউন্ট ক্লোজ করা হয়েছে।");
+                document.getElementById('otp-modal').style.display = 'none';
+                document.getElementById('main-ui').style.display = 'none';
+                document.getElementById('closure-form-section').style.display = 'block';
+            } catch (e) { alert(e.message); }
+        }
+
+        function prepareDoc() {
+            document.getElementById('close-date').innerText = new Date().toLocaleDateString('bn-BD');
+            document.getElementById('closure-text').innerHTML = `আমি <strong>${targetUser.fullName}</strong>, আইডি: <strong>${targetUser.memberId}</strong>, সোনালী ফাউন্ডেশন হতে আমার সদস্যপদ প্রত্যাহারের আবেদন জানাইয়াছি। বর্তমানে আমার কোনো বকেয়া নাই এবং আমার পাওনাদি আমি সঠিক হিসাবে বুঝিয়া পাইয়াছি। আজ হইতে এই সংগঠনের সাথে আমার কোনো দাবি রহিবে না।`;
+            db.collection('settings').doc('appInfo').get().then(doc => { if(doc.exists) document.getElementById('org-title').innerText = doc.data().orgName; });
+        }
+
+        function downloadImage() {
+            html2canvas(document.getElementById('closure-document'), { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Closure_${targetUser.memberId}.jpg`;
+                link.href = canvas.toDataURL("image/jpeg", 1.0);
+                link.click();
+            });
+        }
+        function closeModal() { document.getElementById('otp-modal').style.display = 'none'; }
+    </script>
+</body>
+</html>

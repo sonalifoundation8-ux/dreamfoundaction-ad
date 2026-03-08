@@ -1,0 +1,335 @@
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্য তালিকা - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #2c3e50;
+            --light: #f4f6f9;
+            --green: #27ae60;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--light); padding-bottom: 50px; }
+
+        /* ================= Header ================= */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; cursor: pointer; text-decoration: none; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); flex: 1; }
+        .total-badge { background: var(--gold); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+
+        /* ================= Search Bar ================= */
+        .search-container { padding: 15px 20px 5px 20px; max-width: 600px; margin: auto; }
+        .search-box {
+            display: flex; align-items: center; background: white; padding: 10px 15px;
+            border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #ddd;
+        }
+        .search-box input { border: none; outline: none; width: 100%; font-size: 15px; margin-left: 10px; }
+        .search-box i { color: var(--gold); font-size: 18px; }
+
+        /* ================= Member List ================= */
+        .list-container { padding: 15px 20px; max-width: 600px; margin: auto; }
+        
+        .member-card {
+            background: white; border-radius: 10px; padding: 15px; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid var(--gold);
+            transition: 0.2s;
+        }
+        .member-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2); }
+
+        .member-serial {
+            background: #fdf5e6; color: var(--gold); font-size: 12px; font-weight: bold;
+            padding: 5px 8px; border-radius: 5px; border: 1px solid #f1c40f; white-space: nowrap;
+        }
+
+        .member-img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #eee; }
+        
+        .member-info { flex: 1; }
+        .member-info h4 { font-size: 15px; color: var(--dark); margin-bottom: 3px; }
+        .member-info p { font-size: 13px; color: #666; }
+
+        .btn-detail {
+            background: var(--dark); color: white; border: none; padding: 8px 15px;
+            border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-detail:hover { background: var(--gold); }
+
+        .loader, .no-data { text-align: center; padding: 40px; font-size: 16px; color: #888; }
+        .loader i { color: var(--gold); font-size: 24px; margin-bottom: 10px; }
+
+        /* ================= Modal Design (Details View) ================= */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s;
+        }
+        .modal-content {
+            background-color: #fefefe; margin: 2% auto; padding: 0; border-radius: 10px;
+            width: 95%; max-width: 500px; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s;
+        }
+        .modal-header {
+            background: var(--gold); color: white; padding: 15px; border-radius: 10px 10px 0 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .close-btn { color: white; font-size: 24px; font-weight: bold; cursor: pointer; }
+        .modal-body { padding: 15px; max-height: 80vh; overflow-y: auto; }
+
+        /* Detailed Card Sections */
+        .detail-section { margin-bottom: 15px; border: 1px solid #eee; border-radius: 8px; padding: 10px; background: #f9f9f9; }
+        .detail-title { font-size: 14px; font-weight: bold; color: var(--gold); border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; }
+        
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 0; font-size: 13px; border-bottom: 1px dashed #e0e0e0; padding-bottom: 4px; }
+        .full-width { grid-column: span 2; }
+        .info-label { color: #666; font-weight: 600; white-space: nowrap; }
+        .info-val { color: #333; text-align: right; word-break: break-word; }
+        
+        .doc-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .doc-item { text-align: center; }
+        .doc-img { width: 100%; height: 100px; object-fit: cover; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; }
+        .doc-label { font-size: 11px; color: #555; margin-top: 2px; }
+
+        /* Animations */
+        @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+        @keyframes slideUp { from {transform: translateY(50px);} to {transform: translateY(0);} }
+
+    </style>
+</head>
+<body>
+
+    <!-- ================= ১. Header ================= -->
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">সদস্য তালিকা</div>
+        <div class="total-badge" id="total-count">মোট: 0</div>
+    </div>
+
+    <!-- ================= ২. Search Bar ================= -->
+    <div class="search-container">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" onkeyup="filterMembers()" placeholder="নাম অথবা আইডি (SF-001) দিয়ে খুঁজুন...">
+        </div>
+    </div>
+
+    <!-- ================= ৩. Member List ================= -->
+    <div class="list-container" id="member-list">
+        <div class="loader"><i class="fa-solid fa-spinner fa-spin"></i><br>ডাটা লোড হচ্ছে...</div>
+    </div>
+
+    <!-- ================= ৪. Details Modal ================= -->
+    <div id="modal-member-detail" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--dark);">
+                <h3>সদস্যের সম্পূর্ণ তথ্য</h3>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="member-detail-body">
+                <!-- ডায়নামিক ডাটা আসবে -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= JavaScript Logic ================= -->
+    <script>
+        // ১. ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let allMembers = []; // সার্চিংয়ের জন্য গ্লোবাল ভেরিয়েবল
+
+        // সিকিউরিটি চেক
+        auth.onAuthStateChanged((user) => {
+            if (!user) window.location.href = "index.html";
+            else {
+                db.collection('users').doc(user.uid).get().then(doc => {
+                    if(!doc.exists || doc.data().role !== 'admin') { 
+                        auth.signOut(); window.location.href = "index.html"; 
+                    } else {
+                        loadActiveMembers();
+                    }
+                });
+            }
+        });
+
+        // ২. ডাটাবেজ থেকে অ্যাক্টিভ সদস্য লোড করা
+        function loadActiveMembers() {
+            const listContainer = document.getElementById('member-list');
+            
+            db.collection('users').where('status', '==', 'active').onSnapshot(snap => {
+                allMembers = [];
+                snap.forEach(doc => {
+                    allMembers.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // আইডি অনুযায়ী সর্ট করা
+                allMembers.sort((a, b) => (a.memberId || '').localeCompare(b.memberId || ''));
+                
+                renderMembers(allMembers);
+                document.getElementById('total-count').innerText = "মোট: " + allMembers.length;
+            });
+        }
+
+        // ৩. লিস্ট রেন্ডার করা
+        function renderMembers(data) {
+            const listContainer = document.getElementById('member-list');
+            if (data.length === 0) {
+                listContainer.innerHTML = '<div class="no-data">কোনো সদস্য পাওয়া যায়নি</div>';
+                return;
+            }
+
+            let html = '';
+            data.forEach(m => {
+                const img = m.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+                html += `
+                    <div class="member-card">
+                        <div class="member-serial">${m.memberId || 'N/A'}</div>
+                        <img src="${img}" class="member-img">
+                        <div class="member-info">
+                            <h4>${m.fullName}</h4>
+                            <p><i class="fa-solid fa-phone"></i> ${m.phone}</p>
+                        </div>
+                        <button class="btn-detail" onclick="viewMemberDetail('${m.id}')">বিস্তারিত</button>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+        }
+
+        // ৪. সার্চ ফিল্টার
+        function filterMembers() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allMembers.filter(m => 
+                (m.fullName && m.fullName.toLowerCase().includes(query)) ||
+                (m.memberId && m.memberId.toLowerCase().includes(query)) ||
+                (m.phone && m.phone.includes(query))
+            );
+            renderMembers(filtered);
+        }
+
+        // ৫. বিস্তারিত তথ্য (আপডেট করা)
+        function viewMemberDetail(uid) {
+            const d = allMembers.find(m => m.id === uid);
+            if (!d) return;
+
+            const showImg = (url, label) => url ? 
+                `<div class="doc-item"><img src="${url}" class="doc-img" onclick="window.open('${url}')"><div class="doc-label">${label}</div></div>` : '';
+
+            const html = `
+                <div style="text-align:center; padding-bottom:15px;">
+                    <img src="${d.photoUrl}" style="width:80px; height:80px; border-radius:50%; border:2px solid #d4af37;">
+                    <h3>${d.fullName}</h3>
+                    <p style="font-size:12px; color:#666;">ID: ${d.memberId}</p>
+                    <p style="font-size:14px; font-weight:bold; color:green;">বর্তমান ব্যালেন্স: ৳ ${d.balance || 0}</p>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-title">ব্যক্তিগত তথ্য</div>
+                    <div class="detail-grid">
+                        <div class="info-row"><span class="info-label">পিতা:</span><span class="info-val">${d.fatherName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">মাতা:</span><span class="info-val">${d.motherName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">মোবাইল:</span><span class="info-val">${d.phone || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">জন্ম:</span><span class="info-val">${d.dob || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">NID:</span><span class="info-val">${d.nid || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">পেশা:</span><span class="info-val">${d.occupation || '-'}</span></div>
+                    </div>
+                </div>
+
+                <!-- ঠিকানা সেকশন আপডেট -->
+                <div class="detail-section">
+                    <div class="detail-title">ঠিকানা</div>
+                    <div class="detail-grid">
+                        <div class="info-row"><span class="info-label">জেলা:</span><span class="info-val">${d.district || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">থানা:</span><span class="info-val">${d.reg_thana || d.thana || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">ইউনিয়ন/পৌর:</span><span class="info-val">${d.union || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">গ্রাম/মহল্লা:</span><span class="info-val">${d.village || '-'}</span></div>
+                        <div class="info-row full-width"><span class="info-label">বর্তমান ঠিকানা:</span><span class="info-val">${d.address || '-'}</span></div>
+                    </div>
+                </div>
+
+                <!-- নমিনি সেকশন আপডেট -->
+                <div class="detail-section">
+                    <div class="detail-title">নমিনির তথ্য</div>
+                    <div class="detail-grid">
+                        <div class="info-row"><span class="info-label">নাম:</span><span class="info-val">${d.nomineeName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">সম্পর্ক:</span><span class="info-val">${d.nomineeRelation || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">পিতা/স্বামী:</span><span class="info-val">${d.nomineeFatherName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">মাতা:</span><span class="info-val">${d.nomineeMotherName || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">জন্ম:</span><span class="info-val">${d.nomineeDob || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">NID:</span><span class="info-val">${d.nomineeNid || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">মোবাইল:</span><span class="info-val">${d.nomineePhone || '-'}</span></div>
+                        
+                        <!-- নমিনির ঠিকানা -->
+                        <div class="info-row"><span class="info-label">জেলা:</span><span class="info-val">${d.nomineeDistrict || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">থানা:</span><span class="info-val">${d.nomineeThana || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">ইউনিয়ন:</span><span class="info-val">${d.nomineeUnion || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">গ্রাম:</span><span class="info-val">${d.nomineeVillage || '-'}</span></div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-title">পেমেন্ট তথ্য</div>
+                    <div class="detail-grid">
+                        <div class="info-row"><span class="info-label">মেথড:</span><span class="info-val">${d.paymentMethod || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">TrxID:</span><span class="info-val">${d.trxId || '-'}</span></div>
+                    </div>
+                </div>
+
+                <!-- ডকুমেন্টস সেকশন আপডেট -->
+                <div class="detail-section">
+                    <div class="detail-title">ডকুমেন্টস</div>
+                    <div class="doc-gallery">
+                        ${showImg(d.photoUrl, "সদস্যের ছবি")}
+                        ${showImg(d.signUrl, "স্বাক্ষর")}
+                        ${showImg(d.nidFrontUrl, "NID সামনে")}
+                        ${showImg(d.nidBackUrl, "NID পিছনে")}
+                        ${showImg(d.nomineePhotoUrl, "নমিনির ছবি")}
+                        ${showImg(d.nomineeNidFrontUrl, "নমিনি NID সামনে")}
+                        ${showImg(d.nomineeNidBackUrl, "নমিনি NID পিছনে")}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('member-detail-body').innerHTML = html;
+            document.getElementById('modal-member-detail').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-member-detail').style.display = 'none';
+        }
+
+        window.onclick = function(e) {
+            if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

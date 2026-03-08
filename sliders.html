@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>স্লাইডার সেটআপ - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --red: #e74c3c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); display: flex; justify-content: center; padding: 15px; }
+
+        .admin-container {
+            width: 100%; max-width: 500px; background-color: white; 
+            border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden;
+            min-height: 80vh; padding-bottom: 30px;
+        }
+
+        /* Header */
+        .page-header {
+            background: var(--dark); padding: 25px; text-align: center; color: white; position: relative;
+            border-bottom: 5px solid var(--gold);
+        }
+        .back-btn { position: absolute; left: 20px; top: 25px; color: white; font-size: 20px; text-decoration: none; cursor: pointer; }
+
+        .content-area { padding: 20px; }
+        .card-title { font-size: 16px; font-weight: bold; color: var(--dark); margin-bottom: 15px; border-left: 4px solid var(--gold); padding-left: 10px; }
+
+        /* Upload Box */
+        .upload-box {
+            border: 2px dashed var(--gold); border-radius: 15px; padding: 30px;
+            text-align: center; background: #fffdf5; cursor: pointer; transition: 0.3s;
+        }
+        .upload-box:hover { background: #fdf5e6; }
+        .upload-box i { font-size: 40px; color: var(--gold); margin-bottom: 10px; }
+        .upload-box p { font-size: 14px; color: #666; font-weight: bold; }
+
+        /* Preview Grid */
+        .slider-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 25px;
+        }
+        .slider-item {
+            position: relative; border-radius: 10px; overflow: hidden; height: 100px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1); border: 1px solid #ddd;
+        }
+        .slider-item img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .delete-btn {
+            position: absolute; top: 5px; right: 5px; background: rgba(231, 76, 60, 0.9);
+            color: white; border: none; width: 25px; height: 25px; border-radius: 50%;
+            cursor: pointer; font-size: 12px; display: flex; justify-content: center; align-items: center;
+        }
+
+        .loader { text-align: center; padding: 20px; display: none; color: var(--gold); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <!-- Header -->
+        <header class="page-header">
+            <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+            <h2>স্লাইডার ইমেজ সেটআপ</h2>
+        </header>
+
+        <div class="content-area">
+            <div class="card-title">নতুন ছবি আপলোড করুন</div>
+            
+            <!-- Upload Trigger -->
+            <div class="upload-box" onclick="document.getElementById('slider-input').click()">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>এখানে ক্লিক করে ছবি সিলেক্ট করুন</p>
+                <input type="file" id="slider-input" hidden accept="image/*" onchange="uploadSliderImage(this)">
+            </div>
+
+            <div id="loader" class="loader">
+                <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i>
+                <p style="margin-top: 10px;">ছবি আপলোড হচ্ছে...</p>
+            </div>
+
+            <!-- List of Current Images -->
+            <div class="card-title" style="margin-top: 30px;">বর্তমানে সচল ছবিসমূহ</div>
+            <div id="slider-list" class="slider-grid">
+                <!-- Images will load here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ১. কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const IMGBB_API_KEY = "8162739127c52b219b2e17d2c6373d55";
+
+        // ২. বর্তমান স্লাইডার ইমেজগুলো লোড করা
+        function loadCurrentSliders() {
+            db.collection('settings').doc('sliders').onSnapshot((doc) => {
+                const listArea = document.getElementById('slider-list');
+                listArea.innerHTML = '';
+
+                if (doc.exists && doc.data().images && doc.data().images.length > 0) {
+                    const images = doc.data().images;
+                    images.forEach((url) => {
+                        listArea.innerHTML += `
+                            <div class="slider-item">
+                                <img src="${url}">
+                                <button class="delete-btn" onclick="deleteSlider('${url}')">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    listArea.innerHTML = '<p style="grid-column: span 2; text-align:center; color:#999;">কোনো ছবি নেই।</p>';
+                }
+            });
+        }
+
+        // ৩. নতুন ছবি আপলোড লজিক (ImgBB + Firebase Array Union)
+        async function uploadSliderImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const loader = document.getElementById('loader');
+            loader.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append("image", file);
+
+            try {
+                // ক. ImgBB তে আপলোড
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const imageUrl = data.data.url;
+
+                    // খ. ফায়ারবেস অ্যারে-তে ছবির লিঙ্ক যোগ করা (Array Union)
+                    await db.collection('settings').doc('sliders').set({
+                        images: firebase.firestore.FieldValue.arrayUnion(imageUrl)
+                    }, { merge: true });
+
+                    alert("ছবিটি স্লাইডারে যুক্ত হয়েছে!");
+                }
+            } catch (error) {
+                alert("ছবি আপলোড ব্যর্থ হয়েছে: " + error.message);
+            } finally {
+                loader.style.display = 'none';
+                input.value = ''; // ইনপুট ক্লিয়ার
+            }
+        }
+
+        // ৪. ছবি ডিলিট করার লজিক (Firebase Array Remove)
+        async function deleteSlider(url) {
+            if (!confirm("আপনি কি এই ছবিটি স্লাইডার থেকে সরিয়ে ফেলতে চান?")) return;
+
+            try {
+                await db.collection('settings').doc('sliders').update({
+                    images: firebase.firestore.FieldValue.arrayRemove(url)
+                });
+                alert("ছবিটি ডিলিট হয়েছে!");
+            } catch (error) {
+                alert("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
+            }
+        }
+
+        // পেজ লোড হলে আগের ছবিগুলো নিয়ে আসা
+        loadCurrentSliders();
+    </script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>কল সেন্টার আপডেট - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --white: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); display: flex; justify-content: center; padding: 15px; }
+
+        .admin-container {
+            width: 100%; max-width: 500px; background-color: var(--white); 
+            border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden;
+            min-height: 80vh;
+        }
+
+        /* Header */
+        .page-header {
+            background: var(--dark); padding: 25px; text-align: center; color: white; position: relative;
+            border-bottom: 5px solid var(--gold);
+        }
+        .back-btn { position: absolute; left: 20px; top: 25px; color: white; font-size: 20px; text-decoration: none; cursor: pointer; }
+
+        /* Form Area */
+        .content-area { padding: 30px 20px; }
+        .card-title { font-size: 18px; font-weight: bold; color: var(--dark); margin-bottom: 20px; text-align: center; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 14px; font-weight: 600; color: #555; margin-bottom: 8px; }
+        .form-group label i { color: var(--gold-dark); margin-right: 5px; }
+
+        .form-control {
+            width: 100%; padding: 12px 15px; border: 1.5px solid #ddd; border-radius: 10px;
+            font-size: 15px; outline: none; transition: 0.3s; background: #fafafa;
+        }
+        .form-control:focus { border-color: var(--gold); background: #fff; box-shadow: 0 0 8px rgba(212,175,55,0.2); }
+
+        textarea.form-control { resize: none; }
+
+        /* Save Button */
+        .btn-save {
+            width: 100%; padding: 15px; background: var(--gold-gradient, linear-gradient(135deg, #d4af37, #b8860b));
+            background-color: var(--gold); color: white; border: none; border-radius: 10px;
+            font-size: 17px; font-weight: bold; cursor: pointer; transition: 0.3s;
+            margin-top: 10px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+        .btn-save:hover { background-color: var(--gold-dark); transform: translateY(-2px); }
+        .btn-save:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+        /* Notification */
+        .loader { text-align: center; padding: 20px; display: none; color: var(--gold); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <!-- Header -->
+        <header class="page-header">
+            <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+            <h2>কল সেন্টার আপডেট</h2>
+        </header>
+
+        <div class="content-area">
+            <h3 class="card-title">যোগাযোগের তথ্য সেট করুন</h3>
+            
+            <div id="loader" class="loader">
+                <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i>
+                <p style="margin-top: 10px;">তথ্য লোড হচ্ছে...</p>
+            </div>
+
+            <form id="callCenterForm" onsubmit="saveCallCenterData(event)">
+                
+                <!-- Mobile Number -->
+                <div class="form-group">
+                    <label><i class="fa-solid fa-phone"></i> মোবাইল নাম্বার (হেল্পলাইন)</label>
+                    <input type="text" id="admin-mobile" class="form-control" placeholder="যেমন: ০১৭০০-০০০০০০" required>
+                </div>
+
+                <!-- WhatsApp Number -->
+                <div class="form-group">
+                    <label><i class="fa-brands fa-whatsapp"></i> হোয়াটসঅ্যাপ নাম্বার</label>
+                    <input type="text" id="admin-whatsapp" class="form-control" placeholder="যেমন: ০১৭০০-০০০০০০" required>
+                </div>
+
+                <!-- Office Address -->
+                <div class="form-group">
+                    <label><i class="fa-solid fa-location-dot"></i> অফিসের ঠিকানা</label>
+                    <textarea id="admin-address" class="form-control" rows="3" placeholder="পূর্ণ ঠিকানা লিখুন..." required></textarea>
+                </div>
+
+                <button type="submit" id="save-btn" class="btn-save">
+                    <i class="fa-solid fa-floppy-disk"></i> তথ্য আপডেট করুন
+                </button>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ১. সরাসরি ফায়ারবেস কনফিগারেশন (আপনার প্রজেক্টের আইডি অনুযায়ী)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ২. বর্তমান ডাটা লোড করা (যাতে আগে যা ছিল তা দেখা যায়)
+        async function fetchCurrentInfo() {
+            const loader = document.getElementById('loader');
+            const form = document.getElementById('callCenterForm');
+            loader.style.display = 'block';
+            form.style.opacity = '0.3';
+
+            try {
+                const doc = await db.collection('settings').doc('callCenter').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('admin-mobile').value = data.mobile || "";
+                    document.getElementById('admin-whatsapp').value = data.whatsapp || "";
+                    document.getElementById('admin-address').value = data.address || "";
+                }
+            } catch (error) {
+                console.error("Error fetching info:", error);
+            } finally {
+                loader.style.display = 'none';
+                form.style.opacity = '1';
+            }
+        }
+
+        // ৩. ডাটা সেভ/আপডেট করা
+        async function saveCallCenterData(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-btn');
+            
+            const mobile = document.getElementById('admin-mobile').value.trim();
+            const whatsapp = document.getElementById('admin-whatsapp').value.trim();
+            const address = document.getElementById('admin-address').value.trim();
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> সেভ হচ্ছে...';
+
+            try {
+                // 'settings' কালেকশনের 'callCenter' ডকুমেন্টে ডাটা সেভ
+                await db.collection('settings').doc('callCenter').set({
+                    mobile: mobile,
+                    whatsapp: whatsapp,
+                    address: address,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                alert("কল সেন্টার তথ্য সফলভাবে আপডেট হয়েছে!");
+            } catch (error) {
+                alert("এরর: " + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> তথ্য আপডেট করুন';
+            }
+        }
+
+        // পেজ লোড হলে আগের ডাটা নিয়ে আসা
+        fetchCurrentInfo();
+    </script>
+</body>
+</html>

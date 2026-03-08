@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অভিযোগ বক্স (অ্যাডমিন) - সোনালী ফাউন্ডেশন</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #1a252f;
+            --sidebar-bg: #ffffff;
+            --chat-bg: #e5ddd5;
+            --admin-msg: #dcf8c6;
+            --member-msg: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f0f2f5; height: 100vh; overflow: hidden; }
+
+        /* Main Container */
+        .chat-app {
+            display: flex; width: 100%; height: 100vh; max-width: 1400px; margin: auto;
+            background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        /* ================= Left Sidebar (Chat List) ================= */
+        .sidebar {
+            width: 350px; border-right: 1px solid #ddd; display: flex; flex-direction: column;
+            background: var(--sidebar-bg); z-index: 10;
+        }
+        .sidebar-header {
+            padding: 15px; background: #f0f2f5; display: flex; align-items: center; justify-content: space-between;
+        }
+        .back-home { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+
+        .search-box-area { padding: 10px; background: #fff; border-bottom: 1px solid #eee; }
+        .search-inner {
+            display: flex; align-items: center; background: #f0f2f5; padding: 8px 15px; border-radius: 20px;
+        }
+        .search-inner input {
+            border: none; background: none; outline: none; margin-left: 10px; width: 100%; font-size: 14px;
+        }
+
+        .chat-list { flex: 1; overflow-y: auto; }
+        .chat-item {
+            display: flex; align-items: center; padding: 12px 15px; cursor: pointer;
+            border-bottom: 1px solid #f9f9f9; transition: 0.2s;
+        }
+        .chat-item:hover, .chat-item.active { background: #f0f2f5; }
+        .user-img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; }
+        .user-info { flex: 1; margin-left: 12px; overflow: hidden; }
+        .user-info h4 { font-size: 14px; color: #333; display: flex; justify-content: space-between; }
+        .user-info p { font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .unread-badge { background: #25d366; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+        .time-text { font-size: 10px; color: #999; font-weight: normal; }
+
+        /* ================= Right Section (Chat Window) ================= */
+        .chat-window {
+            flex: 1; display: flex; flex-direction: column; background: var(--chat-bg);
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            background-attachment: fixed;
+        }
+        
+        .chat-win-header {
+            padding: 10px 20px; background: #f0f2f5; display: flex; align-items: center; gap: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .chat-win-header h4 { font-size: 15px; color: #333; }
+        .mobile-back { display: none; cursor: pointer; font-size: 18px; color: #555; }
+
+        /* Message Display Area */
+        .messages-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg-bubble {
+            max-width: 70%; padding: 8px 12px; border-radius: 10px; font-size: 14px; position: relative;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1); line-height: 1.5; word-wrap: break-word;
+        }
+        .msg-admin { align-self: flex-end; background: var(--admin-msg); border-top-right-radius: 0; }
+        .msg-member { align-self: flex-start; background: var(--member-msg); border-top-left-radius: 0; }
+        .msg-time { font-size: 9px; color: #888; text-align: right; margin-top: 5px; display: block; }
+        .msg-img { width: 100%; max-width: 250px; border-radius: 5px; cursor: pointer; display: block; }
+
+        /* Input Area */
+        .input-area { background: #f0f2f5; padding: 10px 20px; display: flex; align-items: center; gap: 15px; }
+        .input-box { flex: 1; padding: 10px 15px; border-radius: 20px; border: none; outline: none; font-size: 14px; }
+        .action-btn { font-size: 22px; color: #666; cursor: pointer; }
+        .send-btn { width: 40px; height: 40px; background: var(--gold); color: white; border-radius: 50%; border: none; cursor: pointer; }
+
+        /* Welcome Screen */
+        .welcome-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f8f9fa; color: #999; }
+        .welcome-screen i { font-size: 80px; margin-bottom: 20px; color: #eee; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; }
+            .chat-window { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; }
+            .chat-window.active { display: flex; }
+            .mobile-back { display: block; }
+        }
+
+        #img-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 3000; justify-content: center; align-items: center; }
+        #img-modal img { max-width: 90%; max-height: 80%; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="chat-app">
+        <!-- ================= Sidebar ================= -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="dashboard.html" class="back-home"><i class="fa-solid fa-arrow-left"></i></a>
+                <h3 style="font-size: 18px;">মেসেজ ইনবক্স</h3>
+                <i class="fa-solid fa-ellipsis-vertical" style="color: #666;"></i>
+            </div>
+
+            <!-- Search Members -->
+            <div class="search-box-area">
+                <div class="search-inner">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="user-search" placeholder="সদস্য ID দিয়ে খুঁজুন..." onkeyup="searchMember(this.value)">
+                </div>
+            </div>
+
+            <!-- Chat List -->
+            <div class="chat-list" id="chat-list-area">
+                <!-- User items will appear here -->
+            </div>
+        </aside>
+
+        <!-- ================= Chat Window ================= -->
+        <main class="chat-window" id="chat-window">
+            <div id="no-chat-screen" class="welcome-screen">
+                <i class="fa-solid fa-comments"></i>
+                <h3>সদস্যের সাথে চ্যাট শুরু করুন</h3>
+                <p>বাম পাশের তালিকা থেকে কাউকে নির্বাচন করুন</p>
+            </div>
+
+            <div id="active-chat-screen" style="display: none; flex-direction: column; height: 100%;">
+                <header class="chat-win-header">
+                    <i class="fa-solid fa-arrow-left mobile-back" onclick="closeChatMobile()"></i>
+                    <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="win-user-img" class="user-img">
+                    <div class="user-info">
+                        <h4 id="win-user-name">সদস্যের নাম</h4>
+                        <p id="win-user-id" style="color: var(--gold); font-weight: bold;">SF-000</p>
+                    </div>
+                </header>
+
+                <div class="messages-area" id="messages-area">
+                    <!-- Messages will load here -->
+                </div>
+
+                <div id="upload-status" style="display:none; text-align:center; padding:5px; font-size:11px; color:var(--gold);">ছবি আপলোড হচ্ছে...</div>
+
+                <footer class="input-area">
+                    <i class="fa-solid fa-paperclip action-btn" onclick="document.getElementById('img-input').click()"></i>
+                    <input type="file" id="img-input" hidden accept="image/*" onchange="uploadImage(this)">
+                    
+                    <input type="text" id="msg-input" class="input-box" placeholder="মেসেজ লিখুন..." onkeydown="if(event.key==='Enter') sendText()">
+                    
+                    <button class="send-btn" onclick="sendText()"><i class="fa-solid fa-paper-plane"></i></button>
+                </footer>
+            </div>
+        </main>
+    </div>
+
+    <!-- Image Preview -->
+    <div id="img-modal" onclick="this.style.display='none'"><img src="" id="modal-full-img"></div>
+
+    <script>
+        // ১. কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const IMGBB_API_KEY = "8162739127c52b219b2e17d2c6373d55";
+
+        let selectedUid = null;
+        let selectedMemberName = "";
+        let chatList = [];
+
+        // ২. চ্যাট লিস্ট লোড (রিয়েল টাইম)
+        function loadChatList() {
+            db.collection('complaints').orderBy('timestamp', 'desc').onSnapshot(snap => {
+                const listArea = document.getElementById('chat-list-area');
+                listArea.innerHTML = '';
+                chatList = [];
+
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    const uid = doc.id;
+                    chatList.push({ uid, ...d });
+
+                    const time = d.timestamp ? new Date(d.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+                    const unreadBadge = d.unread ? `<span class="unread-badge">New</span>` : '';
+
+                    listArea.innerHTML += `
+                        <div class="chat-item ${uid === selectedUid ? 'active' : ''}" onclick="openChat('${uid}', '${d.memberName}', '${d.memberId}')">
+                            <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="list-img-${uid}" class="user-img">
+                            <div class="user-info">
+                                <h4><span>${d.memberName}</span> <span class="time-text">${time}</span></h4>
+                                <p>${unreadBadge} ${d.lastMessage || 'মেসেজ নেই'}</p>
+                            </div>
+                        </div>
+                    `;
+                    fetchMemberPhoto(uid, `list-img-${uid}`);
+                });
+            });
+        }
+
+        async function fetchMemberPhoto(uid, elId) {
+            const doc = await db.collection('users').doc(uid).get();
+            if(doc.exists && doc.data().photoUrl) {
+                const imgEl = document.getElementById(elId);
+                if(imgEl) imgEl.src = doc.data().photoUrl;
+            }
+        }
+
+        // ৩. চ্যাট উইন্ডো ওপেন
+        async function openChat(uid, name, memberId) {
+            selectedUid = uid;
+            selectedMemberName = name;
+            
+            document.getElementById('no-chat-screen').style.display = 'none';
+            document.getElementById('active-chat-screen').style.display = 'flex';
+            document.getElementById('chat-window').classList.add('active');
+            
+            document.getElementById('win-user-name').innerText = name;
+            document.getElementById('win-user-id').innerText = memberId;
+            
+            // হেডার ফটো আপডেট
+            const uDoc = await db.collection('users').doc(uid).get();
+            if(uDoc.exists) document.getElementById('win-user-img').src = uDoc.data().photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+
+            // আনরিড মেসেজ ক্লিয়ার করা
+            db.collection('complaints').doc(uid).update({ unread: false });
+
+            listenMessages(uid);
+        }
+
+        // ৪. মেসেজ লিসেনার
+        let messageUnsubscribe = null;
+        function listenMessages(uid) {
+            if(messageUnsubscribe) messageUnsubscribe();
+
+            messageUnsubscribe = db.collection('complaints').doc(uid).collection('messages')
+              .orderBy('timestamp', 'asc')
+              .onSnapshot(snap => {
+                const msgArea = document.getElementById('messages-area');
+                msgArea.innerHTML = '';
+                
+                snap.forEach(doc => {
+                    const m = doc.data();
+                    const isAdmin = m.sender === 'admin';
+                    const time = m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+                    
+                    // রিড স্ট্যাটাস চেক
+                    if(!isAdmin && m.status !== 'read') {
+                        doc.ref.update({ status: 'read' });
+                    }
+
+                    const tickIcon = m.status === 'read' ? 'fa-check-double' : 'fa-check';
+                    const tickColor = m.status === 'read' ? 'color:#34b7f1;' : '';
+                    const ticks = isAdmin ? `<i class="fa-solid ${tickIcon}" style="font-size:10px; margin-left:5px; ${tickColor}"></i>` : '';
+
+                    let content = m.text ? `<p>${m.text}</p>` : `<img src="${m.imageUrl}" class="msg-img" onclick="showFullImg('${m.imageUrl}')">`;
+
+                    msgArea.innerHTML += `
+                        <div class="msg-bubble ${isAdmin ? 'msg-admin' : 'msg-member'}">
+                            ${content}
+                            <span class="msg-time">${time} ${ticks}</span>
+                        </div>
+                    `;
+                });
+                msgArea.scrollTop = msgArea.scrollHeight;
+            });
+        }
+
+        // ৫. মেসেজ পাঠানো
+        async function sendText() {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if(!text || !selectedUid) return;
+
+            input.value = '';
+            const chatRef = db.collection('complaints').doc(selectedUid);
+            
+            await chatRef.collection('messages').add({
+                sender: 'admin',
+                text: text,
+                status: 'sent',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await chatRef.set({
+                lastMessage: text,
+                lastSender: 'admin',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        // ৬. ছবি পাঠানো
+        async function uploadImage(input) {
+            const file = input.files[0];
+            if(!file || !selectedUid) return;
+
+            document.getElementById('upload-status').style.display = 'block';
+            const formData = new FormData();
+            formData.append("image", file);
+
+            try {
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
+                const result = await res.json();
+                if(result.success) {
+                    const url = result.data.url;
+                    await db.collection('complaints').doc(selectedUid).collection('messages').add({
+                        sender: 'admin',
+                        imageUrl: url,
+                        status: 'sent',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    await db.collection('complaints').doc(selectedUid).update({
+                        lastMessage: "📷 ছবি",
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            } catch (e) { alert("আপলোড ব্যর্থ!"); }
+            finally { document.getElementById('upload-status').style.display = 'none'; input.value = ''; }
+        }
+
+        // ৭. মেম্বার আইডি দিয়ে সার্চ
+        async function searchMember(id) {
+            if(!id) { loadChatList(); return; }
+            const snap = await db.collection('users').where('memberId', '==', id.toUpperCase()).get();
+            const listArea = document.getElementById('chat-list-area');
+            
+            if(!snap.empty) {
+                const u = snap.docs[0].data();
+                const uid = snap.docs[0].id;
+                listArea.innerHTML = `
+                    <div class="chat-item" onclick="openChat('${uid}', '${u.fullName}', '${u.memberId}')">
+                        <img src="${u.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png'}" class="user-img">
+                        <div class="user-info">
+                            <h4>${u.fullName} <span class="time-text">New Search</span></h4>
+                            <p>ID: ${u.memberId} | কথা বলতে ক্লিক করুন</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function closeChatMobile() { document.getElementById('chat-window').classList.remove('active'); }
+        function showFullImg(url) { document.getElementById('modal-full-img').src = url; document.getElementById('img-modal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+        loadChatList();
+    </script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>প্রফেশনাল লোন প্রদান প্যানেল - সোনালী ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --dark: #1a252f; --bg: #f0f2f5; --green: #27ae60; --red: #c0392b; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #333; padding-bottom: 30px; }
+
+        .page-header { background: var(--dark); color: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; }
+        .back-btn { color: white; font-size: 20px; text-decoration: none; }
+        
+        .container { max-width: 600px; margin: 15px auto; padding: 0 12px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; border-top: 4px solid var(--gold); }
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 4px; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; outline: none; font-size: 14px; background: #fff; }
+        .readonly-box { background: #f9f9f9 !important; font-weight: bold; border: 1px dashed var(--gold); }
+
+        .member-profile { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fffdf5; border-radius: 12px; border: 1px solid var(--gold); margin-bottom: 15px; }
+        .m-img { width: 65px; height: 65px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; }
+        
+        .sig-box { border: 1px solid #ddd; background: #fafafa; border-radius: 8px; padding: 5px; text-align: center; }
+        canvas { width: 100%; height: 100px; background: white; border-radius: 5px; touch-action: none; cursor: crosshair; }
+        
+        .btn-main { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; background: var(--dark); transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-main:hover { background: #000; }
+
+        .modal { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
+        .modal-content { background: white; margin: 20% auto; padding: 25px; width: 90%; max-width: 380px; border-radius: 15px; text-align: center; }
+        .otp-input { letter-spacing: 10px; font-size: 24px; text-align: center; border: 2px solid var(--gold); margin: 15px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="nav-title" style="font-weight:bold;">অফিসিয়াল লোন প্রদান</div>
+    </div>
+
+    <div class="container" id="main-ui">
+        <div class="card">
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="searchId" class="form-control" placeholder="সদস্য আইডি (SF-001)">
+                <button class="btn-main" style="width: 60px;" onclick="searchMember()"><i class="fa-solid fa-magnifying-glass"></i></button>
+            </div>
+        </div>
+
+        <div id="loan-form-area" style="display: none;">
+            <div class="member-profile">
+                <img src="" id="res-img" class="m-img">
+                <div>
+                    <h4 id="res-name">...</h4>
+                    <p id="res-id" style="color:var(--gold); font-size:12px; font-weight:bold;">ID: ---</p>
+                    <p id="res-phone" style="font-size:11px;">মোবাইল: ---</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="form-grid">
+                    <div class="form-group"><label>লোনের পরিমাণ (৳)</label><input type="number" id="l-amount" class="form-control" oninput="calculateLoan()"></div>
+                    <div class="form-group"><label>লভ্যাংশ হার (%)</label><input type="text" id="l-rate" class="form-control readonly-box" readonly></div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group"><label>সময় (মাস)</label><select id="l-months" class="form-control" onchange="calculateLoan()"></select></div>
+                    <div class="form-group"><label>পরিশোধের নিয়ম</label>
+                        <select id="l-rule" class="form-control" onchange="calculateLoan()">
+                            <option value="মাসিক">মাসিক</option><option value="সাপ্তাহিক">সাপ্তাহিক</option><option value="দৈনিক">দৈনিক</option><option value="এককালীন">এককালীন</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group"><label>প্রতি কিস্তি সঞ্চয় (৳)</label><input type="number" id="l-savings" class="form-control" value="0" oninput="calculateLoan()"></div>
+                    <div class="form-group"><label>লোনের উদ্দেশ্য</label><input type="text" id="l-purpose" class="form-control" placeholder="যেমন: ব্যবসা"></div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group"><label>লোন প্রদানের মাধ্যম</label>
+                        <select id="l-method" class="form-control">
+                            <option value="বিকাশ">বিকাশ</option><option value="নগদ">নগদ</option><option value="ক্যাশ">ক্যাশ</option><option value="ব্যাঙ্ক">ব্যাঙ্ক</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>মাধ্যম তথ্য (নাম/নম্বর)</label><input type="text" id="l-method-info" class="form-control" placeholder="017xxxxxxxx"></div>
+                </div>
+
+                <div class="form-group"><label>মোট পরিশোধযোগ্য (আসল + লাভ)</label><input type="text" id="l-total" class="form-control readonly-box" readonly></div>
+                <div class="form-group"><label id="inst-label">প্রতি কিস্তি আদায়</label><input type="text" id="l-inst" class="form-control readonly-box" readonly style="color:var(--green);"></div>
+                
+                <div class="form-grid" style="margin-top: 10px;">
+                    <div class="sig-box"><label style="font-size:10px;">ম্যানেজার</label><canvas id="sig-canvas-1"></canvas></div>
+                    <div class="sig-box"><label style="font-size:10px;">সদস্য/সাক্ষী</label><canvas id="sig-canvas-2"></canvas></div>
+                </div>
+
+                <button class="btn-main" style="margin-top: 20px;" onclick="initiateLoanApproval()"><i class="fa-solid fa-paper-plane"></i> অনুমোদন শুরু করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="otp-modal" class="modal">
+        <div class="modal-content">
+            <h3>নিরাপত্তা যাচাই</h3>
+            <p style="font-size: 12px; color: #666;">কোডটি লিখুন:</p>
+            <input type="text" id="otp-input" class="form-control otp-input" maxlength="6">
+            <button id="finish-btn" class="btn-main" style="background: var(--green);" onclick="verifyAndFinish()">নিশ্চিত করুন</button>
+            <button onclick="closeModal()" style="margin-top: 15px; border:none; background:none; color:red;">বাতিল</button>
+        </div>
+    </div>
+
+    <div class="container" id="report-section" style="display: none;">
+        <div class="card" id="loan-agreement" style="padding: 40px; border: 2px solid var(--gold);">
+            <div style="text-align: center; border-bottom: 2px solid var(--gold); padding-bottom: 10px; margin-bottom: 15px;">
+                <h2>সোনালী ফাউন্ডেশন লিমিটেড</h2>
+                <p>লোন ডিসবার্সমেন্ট এগ্রিমেন্ট</p>
+            </div>
+            <div id="agreement-body" style="font-size: 13px; line-height: 1.8;"></div>
+            <div style="margin-top: 40px; display: flex; justify-content: space-between;">
+                <div style="text-align: center; width: 45%; border-top:1px solid #000;"><p>ম্যানেজার</p></div>
+                <div style="text-align: center; width: 45%; border-top:1px solid #000;"><p>সদস্য</p></div>
+            </div>
+        </div>
+        <button class="btn-main" onclick="downloadAgreement()">PDF ডাউনলোড</button>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let selectedUser = null;
+        let generatedOtp = null;
+        let interestRate = 0;
+
+        const monthSelect = document.getElementById('l-months');
+        for(let i=1; i<=12; i++){
+            let opt = document.createElement('option');
+            opt.value = i; opt.innerHTML = i + ' মাস';
+            if(i === 12) opt.selected = true;
+            monthSelect.appendChild(opt);
+        }
+
+        async function searchMember() {
+            const id = document.getElementById('searchId').value.trim();
+            const snap = await db.collection('users').where('memberId', '==', id).get();
+            if(snap.empty) return alert("সদস্য পাওয়া যায়নি!");
+            
+            selectedUser = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            document.getElementById('res-img').src = selectedUser.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+            document.getElementById('res-name').innerText = selectedUser.fullName;
+            document.getElementById('res-id').innerText = "সদস্য আইডি: " + selectedUser.memberId;
+            document.getElementById('res-phone').innerText = "মোবাইল: " + (selectedUser.phone || '---');
+            
+            document.getElementById('loan-form-area').style.display = 'block';
+            const config = await db.collection('settings').doc('loanConfig').get();
+            interestRate = config.exists ? config.data().interestRate : 10;
+            document.getElementById('l-rate').value = interestRate + "%";
+            
+            initCanvas(1); initCanvas(2);
+            calculateLoan();
+        }
+
+        function calculateLoan() {
+            const amt = Number(document.getElementById('l-amount').value) || 0;
+            const months = Number(document.getElementById('l-months').value);
+            const savings = Number(document.getElementById('l-savings').value) || 0;
+            const rule = document.getElementById('l-rule').value;
+
+            const profit = (amt * interestRate / 100) * (months / 12);
+            const totalPayable = amt + profit;
+            
+            let count = 1;
+            if(rule === "মাসিক") count = months;
+            else if(rule === "সাপ্তাহিক") count = months * 4;
+            else if(rule === "দৈনিক") count = months * 30;
+
+            const perInst = (totalPayable / count) + savings;
+            document.getElementById('l-total').value = "৳ " + totalPayable.toFixed(2);
+            document.getElementById('l-inst').value = "৳ " + perInst.toFixed(2);
+            document.getElementById('inst-label').innerText = rule + " আদায় (কিস্তি + সঞ্চয়)";
+        }
+
+        async function initiateLoanApproval() {
+            const amt = Number(document.getElementById('l-amount').value);
+            if(amt <= 0) return alert("পরিমাণ দিন!");
+            generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('bn-BD');
+            const timeStr = now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+
+            try {
+                await db.collection('notifications').add({
+                    receiverUid: selectedUser.id,
+                    message: `লোন ওটিপি: ${generatedOtp}। পরিমাণ: ৳${amt}, তারিখ: ${dateStr}, সময়: ${timeStr}।`,
+                    date: dateStr,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                document.getElementById('otp-modal').style.display = 'block';
+            } catch(e) { alert(e.message); }
+        }
+
+        // --- আপডেট করা লজিক (স্টেটমেন্ট ফিক্স) ---
+        async function verifyAndFinish() {
+            if(document.getElementById('otp-input').value !== generatedOtp) return alert("ভুল কোড!");
+            
+            const btn = document.getElementById('finish-btn');
+            btn.disabled = true; btn.innerText = "প্রসেসিং...";
+
+            const amt = Number(document.getElementById('l-amount').value);
+            const totalPayable = Number(document.getElementById('l-total').value.replace('৳ ', ''));
+            const savingsPerInst = Number(document.getElementById('l-savings').value) || 0;
+            const method = document.getElementById('l-method').value;
+            const methodInfo = document.getElementById('l-method-info').value;
+            const purpose = document.getElementById('l-purpose').value;
+            const rule = document.getElementById('l-rule').value;
+            const months = document.getElementById('l-months').value;
+
+            const now = new Date();
+            const d = now.toLocaleDateString('bn-BD');
+            const t_str = now.toLocaleTimeString('bn-BD');
+            const ts = firebase.firestore.FieldValue.serverTimestamp();
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const fundRef = db.collection('settings').doc('fund');
+                    const userRef = db.collection('users').doc(selectedUser.id);
+                    
+                    const fSnap = await transaction.get(fundRef);
+                    if(!fSnap.exists || fSnap.data().totalAmount < amt) throw "ফান্ডে পর্যাপ্ত টাকা নেই!";
+
+                    // ১. ফান্ড থেকে টাকা বিয়োগ
+                    transaction.update(fundRef, { totalAmount: fSnap.data().totalAmount - amt });
+
+                    // ২. ইউজারের লোন ডিউ আপডেট
+                    transaction.update(userRef, { 
+                        loanDue: firebase.firestore.FieldValue.increment(totalPayable),
+                        loanActive: true 
+                    });
+
+                    // ৩. ফান্ড স্টেটমেন্ট রেকর্ড (Global Fund Statement-এ দেখাবে)
+                    const fundHistoryRef = db.collection('fund_transactions').doc();
+                    transaction.set(fundHistoryRef, {
+                        amount: amt,
+                        type: 'withdraw',
+                        source: `লোন প্রদান (${selectedUser.memberId})`,
+                        date: d,
+                        time: t_str,
+                        timestamp: ts
+                    });
+
+                    // ৪. মেম্বার লোন স্টেটমেন্ট রেকর্ড (Member Loan History-তে দেখাবে)
+                    const loanHistoryRef = db.collection('loan_transactions').doc();
+                    transaction.set(loanHistoryRef, {
+                        uid: selectedUser.id,
+                        memberId: selectedUser.memberId,
+                        memberName: selectedUser.fullName,
+                        amount: amt, // মূল টাকা
+                        payable: totalPayable, // লাভসহ মোট
+                        savingsPerInst: savingsPerInst,
+                        type: 'disbursement', // লোন প্রদান
+                        method: method,
+                        methodInfo: methodInfo,
+                        purpose: purpose,
+                        rule: rule,
+                        months: months,
+                        date: d,
+                        time: t_str,
+                        timestamp: ts,
+                        status: 'approved'
+                    });
+                });
+
+                showAgreement(amt, totalPayable, d);
+            } catch(e) { 
+                alert("ত্রুটি: " + e); 
+                btn.disabled = false; btn.innerText = "নিশ্চিত করুন";
+            }
+        }
+
+        function showAgreement(amt, total, date) {
+            document.getElementById('otp-modal').style.display = 'none';
+            document.getElementById('main-ui').style.display = 'none';
+            document.getElementById('report-section').style.display = 'block';
+            document.getElementById('agreement-body').innerHTML = `
+                আমি <strong>${selectedUser.fullName}</strong>, অদ্য <strong>${date}</strong> তারিখে সোনালী ফাউন্ডেশন হইতে লোন বাবদ নগদ 
+                <strong>৳${amt.toLocaleString()}</strong> গ্রহণ করিলাম। লাভসহ মোট পরিশোধযোগ্য <strong>৳${total.toLocaleString()}</strong> টাকা 
+                আমি কিস্তির মাধ্যমে পরিশোধ করতে অঙ্গীকারবদ্ধ রহিলাম। <br>
+                মাধ্যম: ${document.getElementById('l-method').value} (${document.getElementById('l-method-info').value})।
+            `;
+        }
+
+        function initCanvas(id) {
+            const canvas = document.getElementById('sig-canvas-' + id);
+            const ctx = canvas.getContext("2d");
+            canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+            let drawing = false;
+            const start = (e) => { drawing = true; draw(e); };
+            const end = () => { drawing = false; ctx.beginPath(); };
+            const draw = (e) => {
+                if (!drawing) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX || e.touches[0].clientX) - rect.left;
+                const y = (e.clientY || e.touches[0].clientY) - rect.top;
+                ctx.lineWidth = 2; ctx.lineTo(x, y); ctx.stroke(); ctx.moveTo(x, y);
+            };
+            canvas.addEventListener("mousedown", start); canvas.addEventListener("mouseup", end); canvas.addEventListener("mousemove", draw);
+            canvas.addEventListener("touchstart", (e) => { e.preventDefault(); start(e); }); canvas.addEventListener("touchend", end); canvas.addEventListener("touchmove", draw);
+        }
+
+        function downloadAgreement() {
+            const el = document.getElementById('loan-agreement');
+            html2pdf().from(el).save();
+        }
+        function closeModal() { document.getElementById('otp-modal').style.display = 'none'; }
+    </script>
+</body>
+</html>

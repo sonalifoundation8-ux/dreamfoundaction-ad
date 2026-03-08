@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ফান্ড উত্তোলন - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- Image Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --red: #e74c3c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+
+        /* Balance Card */
+        .balance-card {
+            background: var(--dark); color: white; border-radius: 15px; padding: 25px;
+            text-align: center; margin-bottom: 20px; border-bottom: 5px solid var(--gold);
+        }
+        .balance-card p { font-size: 14px; opacity: 0.8; margin-bottom: 5px; }
+        .balance-card h1 { font-size: 30px; color: var(--gold); font-weight: 800; }
+
+        /* Form Card */
+        .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .form-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #555; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 15px; background: #fafafa; transition: 0.3s; }
+        .form-control:focus { border-color: var(--gold); background: #fff; }
+
+        .btn-submit { width: 100%; padding: 15px; background: var(--red); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.3s; }
+        .btn-submit:hover { background: #c0392b; transform: scale(1.02); }
+
+        /* ================= Receipt Styling ================= */
+        #slip-area { display: none; margin-top: 20px; }
+        .receipt-box {
+            background: white; padding: 30px; border: 2px solid var(--gold); border-radius: 12px;
+            position: relative; overflow: hidden; background-color: #ffffff;
+        }
+        .watermark { position: absolute; top: 40%; left: 10%; font-size: 50px; color: rgba(212,175,55,0.05); transform: rotate(-30deg); font-weight: bold; pointer-events: none; z-index: 1; }
+        
+        .receipt-head { text-align: center; border-bottom: 2px solid #f1f1f1; padding-bottom: 10px; margin-bottom: 20px; position: relative; z-index: 2; }
+        .receipt-logo { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto; }
+        
+        .receipt-table { width: 100%; font-size: 14px; border-collapse: collapse; position: relative; z-index: 2; }
+        .receipt-table td { padding: 10px 0; border-bottom: 1px dashed #eee; }
+        .receipt-table td:last-child { text-align: right; font-weight: bold; color: #000; }
+        
+        .amount-row { background: #fffdf5; padding: 15px; border-radius: 8px; text-align: center; margin-top: 20px; border: 1px solid var(--gold); position: relative; z-index: 2; }
+        .amount-row h2 { color: var(--red); margin-top: 5px; font-weight: 800; }
+
+        .btn-download { width: 100%; padding: 14px; background: var(--dark); color: white; border: none; border-radius: 10px; margin-top: 20px; cursor: pointer; font-weight: bold; }
+
+        .loader { display: none; text-align: center; padding: 10px; color: var(--gold); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">মাদার ফান্ড উত্তোলন</div>
+    </div>
+
+    <div class="container">
+        <!-- Current Fund Display -->
+        <div class="balance-card">
+            <p>বর্তমান মাদার ফান্ড স্থিতি</p>
+            <h1 id="current-fund">৳ ০.০০</h1>
+        </div>
+
+        <!-- Withdrawal Form -->
+        <div class="card" id="form-area">
+            <form onsubmit="handleWithdrawal(event)">
+                <div style="margin-bottom: 15px;">
+                    <label class="form-label">উত্তোলনের পরিমাণ (৳)</label>
+                    <input type="number" id="w-amount" class="form-control" placeholder="টাকার অংক লিখুন" required>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label class="form-label">উত্তোলনের কারণ / খাত</label>
+                    <input type="text" id="w-source" class="form-control" placeholder="যেমন: অফিস খরচ / ল্যাপটপ ক্রয়" required>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label class="form-label">উত্তোলনের মাধ্যম</label>
+                    <select id="w-method" class="form-control" required>
+                        <option value="Cash">ক্যাশ</option>
+                        <option value="bKash">বিকাশ</option>
+                        <option value="Nagad">নগদ</option>
+                        <option value="Account">ব্যাংক একাউন্ট</option>
+                    </select>
+                </div>
+
+                <div id="loader" class="loader"><i class="fa-solid fa-circle-notch fa-spin"></i> প্রসেসিং হচ্ছে...</div>
+
+                <button type="submit" id="submit-btn" class="btn-submit">
+                    উত্তোলন নিশ্চিত করুন
+                </button>
+            </form>
+        </div>
+
+        <!-- Receipt Area -->
+        <div id="slip-area">
+            <div class="receipt-box" id="withdraw-receipt">
+                <div class="watermark">সোনালী ফাউন্ডেশন</div>
+                <div class="receipt-head">
+                    <img src="" id="receipt-logo-img" class="receipt-logo" crossorigin="anonymous">
+                    <h2 id="receipt-org-name" style="color: var(--gold-dark);">সংগঠনের নাম</h2>
+                    <p>অফিসিয়াল ডেবিট ভাউচার (উত্তোলন)</p>
+                </div>
+                
+                <table class="receipt-table">
+                    <tr><td>তারিখ:</td><td id="r-date">---</td></tr>
+                    <tr><td>উত্তোলনের খাত:</td><td id="r-source">---</td></tr>
+                    <tr><td>উত্তোলন মাধ্যম:</td><td id="r-method">---</td></tr>
+                    <tr><td>অনুমোদনকারী:</td><td>অ্যাডমিন</td></tr>
+                    <tr><td>স্ট্যাটাস:</td><td style="color: var(--green);">সফল (Success)</td></tr>
+                </table>
+                
+                <div class="amount-row">
+                    <span style="font-size: 11px; color: #666; font-weight: bold;">উত্তোলনের পরিমাণ</span>
+                    <h2 id="r-amount">৳ ০.০০</h2>
+                </div>
+                
+                <p style="text-align: center; font-size: 10px; color: #aaa; margin-top: 25px;">এটি একটি সিস্টেম জেনারেটেড উত্তোলন রশিদ।</p>
+            </div>
+            
+            <button class="btn-download" onclick="downloadReceipt()"><i class="fa-solid fa-image"></i> রশিদ ডাউনলোড করুন (JPG)</button>
+            <button class="btn-download" style="background:#7f8c8d; margin-top: 10px;" onclick="location.reload()">নতুন উত্তোলন</button>
+        </div>
+    </div>
+
+    <script>
+        // ১. ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentFundAmount = 0;
+
+        // ২. বর্তমান ফান্ড লোড করা (Live Update)
+        function loadCurrentFund() {
+            db.collection('settings').doc('fund').onSnapshot(doc => {
+                if(doc.exists) {
+                    currentFundAmount = Number(doc.data().totalAmount || 0);
+                    document.getElementById('current-fund').innerText = "৳ " + currentFundAmount.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                }
+            });
+            
+            // রশিদের জন্য প্রতিষ্ঠানের তথ্য লোড
+            db.collection('settings').doc('appInfo').get().then(doc => {
+                if(doc.exists) {
+                    document.getElementById('receipt-org-name').innerText = doc.data().orgName;
+                    if(doc.data().logoUrl) {
+                        document.getElementById('receipt-logo-img').src = doc.data().logoUrl + '?t=' + Date.now();
+                    }
+                }
+            });
+        }
+
+        // ৩. উত্তোলন লজিক
+        async function handleWithdrawal(e) {
+            e.preventDefault();
+            
+            const amount = Number(document.getElementById('w-amount').value);
+            const source = document.getElementById('w-source').value.trim();
+            const method = document.getElementById('w-method').value;
+            const loader = document.getElementById('loader');
+            const submitBtn = document.getElementById('submit-btn');
+
+            if(amount <= 0) return alert("সঠিক পরিমাণ লিখুন!");
+            if(amount > currentFundAmount) return alert("ফান্ডে পর্যাপ্ত টাকা নেই! বর্তমান ফান্ড: ৳" + currentFundAmount);
+
+            if(!confirm(`আপনি কি ফান্ড থেকে ৳${amount} উত্তোলন করতে নিশ্চিত?`)) return;
+
+            loader.style.display = 'block';
+            submitBtn.disabled = true;
+
+            const dateStr = new Date().toLocaleDateString('bn-BD');
+            const isoDate = new Date().toISOString().split('T')[0];
+            const ts = firebase.firestore.FieldValue.serverTimestamp();
+
+            try {
+                const fundRef = db.collection('settings').doc('fund');
+                const historyRef = db.collection('fund_transactions').doc();
+
+                await db.runTransaction(async (t) => {
+                    const fDoc = await t.get(fundRef);
+                    const curFund = fDoc.exists ? Number(fDoc.data().totalAmount || 0) : 0;
+
+                    if(curFund < amount) throw "ফান্ডে পর্যাপ্ত টাকা নেই!";
+
+                    // ১. ফান্ড আপডেট (মাইনাস)
+                    t.set(fundRef, { totalAmount: curFund - amount }, { merge: true });
+
+                    // ২. মাদার স্টেটমেন্ট এন্ট্রি
+                    t.set(historyRef, {
+                        amount: amount,
+                        type: 'withdraw', // Fund Out
+                        source: source,
+                        method: method,
+                        date: isoDate,
+                        timestamp: ts
+                    });
+                });
+
+                // ৩. রশিদ ডাটা বসানো
+                document.getElementById('r-date').innerText = dateStr;
+                document.getElementById('r-source').innerText = source;
+                document.getElementById('r-method').innerText = method;
+                document.getElementById('r-amount').innerText = "৳ " + amount.toFixed(2);
+
+                alert("ফান্ড থেকে টাকা সফলভাবে উত্তোলন করা হয়েছে!");
+                
+                document.getElementById('form-area').style.display = 'none';
+                document.getElementById('slip-area').style.display = 'block';
+
+            } catch (err) {
+                alert("ব্যর্থ হয়েছে: " + err);
+            } finally {
+                loader.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        }
+
+        // ৪. রশিদ ডাউনলোড লজিক
+        function downloadReceipt() {
+            const el = document.getElementById('withdraw-receipt');
+            html2canvas(el, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff" }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Withdraw_Voucher_${Date.now()}.jpg`;
+                link.href = canvas.toDataURL("image/jpeg", 1.0);
+                link.click();
+            });
+        }
+
+        loadCurrentFund();
+    </script>
+</body>
+</html>

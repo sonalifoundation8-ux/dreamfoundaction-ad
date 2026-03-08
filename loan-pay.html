@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন পরিশোধ কন্ট্রোল - ড্রিম ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Image Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --gold-dark: #b8860b; --dark: #1a252f; --bg: #f4f7f6; --green: #27ae60; --red: #c0392b; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        .page-header { background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        .nav-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        .choice-container { max-width: 500px; margin: 40px auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .choice-btn { background: white; padding: 25px; border-radius: 20px; text-align: center; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 2px solid transparent; transition: 0.3s; color: var(--dark); text-decoration: none; }
+        .choice-btn:hover { border-color: var(--gold); transform: translateY(-5px); }
+        .choice-btn i { font-size: 35px; color: var(--gold); margin-bottom: 10px; }
+
+        .view-container { display: none; max-width: 600px; margin: 20px auto; padding: 0 15px; }
+        .card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 4px solid var(--gold); }
+        
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 14px; background: #fafafa; }
+        .readonly-box { background: #fdf5e6 !important; font-weight: bold; color: var(--dark); border: 1px dashed var(--gold); }
+        .total-box { background: var(--dark) !important; color: var(--gold) !important; font-size: 18px !important; text-align: center; border: 2px solid var(--gold); }
+
+        .member-mini { display: flex; align-items: center; gap: 15px; padding: 15px; background: #fffdf5; border-radius: 15px; border: 1px solid var(--gold); margin-bottom: 20px; }
+        .member-mini img { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold); }
+
+        .req-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid var(--green); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .req-info { display: flex; align-items: center; gap: 12px; }
+        .req-img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1px solid var(--gold); }
+
+        .full-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; overflow-y: auto; }
+        .modal-nav { padding: 15px 20px; background: var(--dark); color: white; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+        .detail-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+
+        /* Receipt Slip Styling (Fixed Logo & High Res) */
+        #slip-area { display: none; padding: 10px; }
+        .receipt { width: 100%; max-width: 400px; margin: auto; background: white; border: 2px solid var(--gold); padding: 25px; border-radius: 15px; position: relative; background-color: #ffffff; }
+        .receipt-head { text-align: center; border-bottom: 1px solid #eee; margin-bottom: 15px; padding-bottom: 10px; }
+        .receipt-logo { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; display: block; margin: 0 auto 10px auto; }
+        .watermark { position: absolute; top: 40%; left: 10%; font-size: 40px; color: rgba(212,175,55,0.05); transform: rotate(-30deg); font-weight: bold; pointer-events: none; z-index: 1; }
+        .btn-main { width: 100%; padding: 15px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; background: var(--dark); transition: 0.3s; }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div id="header-title" class="nav-title">লোন পরিশোধ কন্ট্রোল</div>
+    </div>
+
+    <div id="choice-view" class="choice-container">
+        <div class="choice-btn" onclick="switchView('manual')"><i class="fa-solid fa-cash-register"></i><h3>সরাসরি লোন পরিশোধ</h3></div>
+        <div class="choice-btn" onclick="switchView('approval')"><i class="fa-solid fa-user-check"></i><h3>পরিশোধ রিকোয়েস্ট (Approve)</h3></div>
+    </div>
+
+    <!-- VIEW 1: Manual Pay -->
+    <div id="manual-pay-view" class="view-container">
+        <div class="card"><label class="form-group">সদস্য আইডি সার্চ (SF-001)</label>
+            <div style="display: flex; gap: 10px;"><input type="text" id="searchId" class="form-control" placeholder="ID লিখুন"><button class="btn-main" style="width: 60px; background:var(--dark); border:none; color:#fff; border-radius:10px; cursor:pointer;" onclick="searchMember()"><i class="fa-solid fa-magnifying-glass"></i></button></div>
+        </div>
+        <div id="manual-loader" class="loader" style="display: none;"><i class="fa-solid fa-circle-notch fa-spin"></i> যাচাই হচ্ছে...</div>
+
+        <div id="manual-form-area" style="display: none;">
+            <div class="member-mini"><img src="" id="m-img"><div><h4 id="m-name">সদস্যের নাম</h4><p id="m-phone" style="font-size: 11px;">মোবাইল: ---</p><p id="m-due" style="color: var(--red); font-weight: bold;">বকেয়া: ৳০.০০</p></div></div>
+            <div class="card">
+                <div class="form-group"><label>তারিখ (অটো)</label><input type="text" id="p-date" class="form-control readonly-box" readonly></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group"><label>আসল টাকা</label><input type="number" id="p-principal" class="form-control" oninput="updateTotalManual()"></div>
+                    <div class="form-group"><label>লভ্যাংশ (লাভ)</label><input type="number" id="p-interest" class="form-control" oninput="updateTotalManual()"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group"><label>সঞ্চয় জমা</label><input type="number" id="p-savings" class="form-control" oninput="updateTotalManual()"></div>
+                    <div class="form-group"><label>অতিরিক্ত আদায় (+)</label><input type="number" id="p-extra" class="form-control" value="0" oninput="updateTotalManual()"></div>
+                </div>
+                <div class="form-group"><label>বাকি/কম পরিমাণ (-)</label><input type="number" id="p-short" class="form-control" value="0" oninput="updateTotalManual()"></div>
+                <div class="form-group"><label>মোট আদায়কৃত টাকা (৳)</label><input type="text" id="p-total-disp" class="form-control readonly-box total-box" readonly value="৳ ০.০০"></div>
+                <div class="form-group">
+                    <label>গ্রহণের মাধ্যম</label>
+                    <select id="p-method" class="form-control">
+                        <option value="অফিস ক্যাশ">অফিস ক্যাশ</option>
+                        <option value="বিকাশ">বিকাশ</option>
+                        <option value="নগদ">নগদ</option>
+                    </select>
+                </div>
+                <button class="btn-main" style="background: var(--green);" onclick="submitDirectPayment()">পরিশোধ নিশ্চিত ও রশিদ তৈরি</button>
+            </div>
+        </div>
+
+        <div id="slip-area" style="display:none; text-align:center;">
+            <div class="receipt" id="repayment-receipt">
+                <div class="watermark">ড্রিম ফাউন্ডেশন</div>
+                <div class="receipt-head" style="position: relative; z-index: 5;">
+                    <img src="" id="receipt-logo" class="receipt-logo" crossorigin="anonymous">
+                    <h2 id="receipt-org-name">সংগঠন</h2>
+                    <p style="font-size: 10px; color:#888;">অফিসিয়াল লোন পরিশোধ রশিদ</p>
+                </div>
+                <div style="position: relative; z-index: 5;">
+                    <div class="detail-item"><span>তারিখ:</span><span id="r-date"></span></div>
+                    <div class="detail-item"><span>সদস্য:</span><span id="r-name"></span></div>
+                    <div class="detail-item"><span>সদস্য আইডি:</span><span id="r-id"></span></div><hr style="margin: 10px 0; border: 0; border-top: 1px dashed #ddd;">
+                    <div class="detail-item"><span>আসল পরিশোধ:</span><span id="r-principal"></span></div>
+                    <div class="detail-item"><span>লাভ পরিশোধ:</span><span id="r-interest"></span></div>
+                    <div class="detail-item"><span style="color: blue;">সঞ্চয় জমা (সেভিংসে):</span><span id="r-savings"></span></div>
+                    <div class="detail-item"><span>অতিরিক্ত আদায় (+):</span><span id="r-extra"></span></div>
+                    <div class="detail-item"><span>বাকি/কম (-):</span><span id="r-short"></span></div>
+                    <div class="detail-item" style="border:none; margin-top:10px;"><span style="font-weight: bold;">মোট আদায়:</span><span id="r-total" style="font-weight: 800; color:var(--green);"></span></div>
+                </div>
+            </div>
+            <button class="btn-main" onclick="downloadImage()" style="margin-top:20px;"><i class="fa-solid fa-image"></i> রশিদ ডাউনলোড করুন</button>
+            <button class="btn-main" style="background:#7f8c8d; margin-top: 10px;" onclick="location.reload()">নতুন পরিশোধ</button>
+        </div>
+    </div>
+
+    <!-- VIEW 2: Approval View -->
+    <div id="approval-view" class="view-container"><div id="request-list"></div></div>
+
+    <div id="detailModal" class="full-modal">
+        <div class="modal-nav"><i class="fa-solid fa-xmark" style="font-size:24px; cursor:pointer;" onclick="closeModal()"></i><span style="font-weight: bold;">রিকোয়েস্ট বিস্তারিত</span><span></span></div>
+        <div class="report-content" style="padding: 20px; max-width: 600px; margin: auto;"><div id="modal-user-info" class="member-mini"></div><div class="card" id="modal-details-card"></div></div>
+        <div style="display: flex; gap: 15px; padding: 20px; max-width: 600px; margin: auto;"><button class="btn-main" style="background: var(--red); flex:1;" id="btn-reject">রিজেক্ট</button><button class="btn-main" style="background: var(--green); flex:1;" id="btn-approve">Approve করুন</button></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let selectedUser = null; let pendingRequests = [];
+
+        function switchView(view) {
+            document.getElementById('choice-view').style.display = 'none';
+            if(view === 'manual') { document.getElementById('manual-pay-view').style.display = 'block'; document.getElementById('p-date').value = new Date().toLocaleDateString('bn-BD'); }
+            else { document.getElementById('approval-view').style.display = 'block'; loadRequests(); }
+        }
+
+        async function searchMember() {
+            const id = document.getElementById('searchId').value.trim();
+            if(!id) return;
+            document.getElementById('manual-loader').style.display = 'block';
+            document.getElementById('manual-form-area').style.display = 'none';
+            try {
+                const uSnap = await db.collection('users').where('memberId', '==', id).get();
+                if(uSnap.empty) { document.getElementById('manual-loader').style.display = 'none'; return alert("সদস্য নেই!"); }
+                const uDoc = uSnap.docs[0]; selectedUser = { id: uDoc.id, ...uDoc.data() };
+                const curDue = Number(selectedUser.loanDue || 0);
+
+                document.getElementById('m-img').src = selectedUser.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+                document.getElementById('m-name').innerText = selectedUser.fullName;
+                document.getElementById('m-phone').innerText = "মোবাইল: " + selectedUser.phone;
+                document.getElementById('m-due').innerText = "বকেয়া: ৳" + curDue.toFixed(2);
+
+                if (curDue <= 0) {
+                    alert("সদস্যের কোনো লোন বাকি নেই!");
+                    document.getElementById('p-principal').value = 0; document.getElementById('p-interest').value = 0; document.getElementById('p-savings').value = 0;
+                } else {
+                    const lSnap = await db.collection('loan_applications').where('uid', '==', selectedUser.id).where('status', '==', 'approved').get();
+                    if(!lSnap.empty) {
+                        let all = []; lSnap.forEach(d => all.push(d.data())); all.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                        const loan = all[0];
+                        const months = Number(loan.durationMonths), rule = loan.repaymentRule, rate = Number(loan.interestRate), amount = Number(loan.loanAmount);
+                        const totalInt = (amount * rate / 100) * (months / 12);
+                        let count = (rule === "মাসিক") ? months : (rule === "সাপ্তাহিক" ? months * 4 : (rule === "দৈনিক" ? months * 30 : 1));
+                        document.getElementById('p-principal').value = (amount / count).toFixed(2);
+                        document.getElementById('p-interest').value = (totalInt / count).toFixed(2);
+                        document.getElementById('p-savings').value = loan.savingsPerInst || 0;
+                    }
+                }
+                updateTotalManual();
+                document.getElementById('manual-loader').style.display = 'none';
+                document.getElementById('manual-form-area').style.display = 'block';
+                db.collection('settings').doc('appInfo').get().then(doc => {
+                    if(doc.exists) { 
+                        document.getElementById('receipt-org-name').innerText = doc.data().orgName; 
+                        document.getElementById('receipt-logo').src = doc.data().logoUrl + '?t=' + Date.now(); 
+                    }
+                });
+            } catch (e) { alert(e.message); document.getElementById('manual-loader').style.display = 'none'; }
+        }
+
+        function updateTotalManual() {
+            const p = Number(document.getElementById('p-principal').value) || 0, i = Number(document.getElementById('p-interest').value) || 0, s = Number(document.getElementById('p-savings').value) || 0, e = Number(document.getElementById('p-extra').value) || 0, d = Number(document.getElementById('p-short').value) || 0;
+            document.getElementById('p-total-disp').value = "৳ " + (p + i + s + e - d).toFixed(2);
+        }
+
+        async function submitDirectPayment() {
+            if (Number(selectedUser.loanDue || 0) <= 0) return alert("সদস্যের কোনো লোন বাকি নেই!");
+            const p = Number(document.getElementById('p-principal').value), i = Number(document.getElementById('p-interest').value), s = Number(document.getElementById('p-savings').value), e = Number(document.getElementById('p-extra').value), d = Number(document.getElementById('p-short').value);
+            const total = (p + i + s + e) - d;
+            if(total <= 0) return alert("পরিমাণ সঠিক নয়");
+            if(!confirm("নিশ্চিত পরিশোধ করতে চান?")) return;
+
+            const data = { uid: selectedUser.id, memberName: selectedUser.fullName, memberId: selectedUser.memberId, principalAmount: p, interestAmount: i, savingsAmount: s, extraAmount: e, shortfallAmount: d, totalPaid: total, method: document.getElementById('p-method').value, date: document.getElementById('p-date').value };
+            await executeTransaction(data, null);
+            
+            document.getElementById('r-date').innerText = data.date; document.getElementById('r-name').innerText = data.memberName; document.getElementById('r-id').innerText = data.memberId;
+            document.getElementById('r-principal').innerText = p.toFixed(2); document.getElementById('r-interest').innerText = i.toFixed(2); document.getElementById('r-savings').innerText = s.toFixed(2);
+            document.getElementById('r-extra').innerText = e.toFixed(2); document.getElementById('r-short').innerText = d.toFixed(2); document.getElementById('r-total').innerText = "৳"+total.toFixed(2);
+            document.getElementById('manual-form-area').style.display = 'none'; document.getElementById('searchId').parentElement.parentElement.style.display = 'none'; document.getElementById('slip-area').style.display = 'block';
+        }
+
+        function loadRequests() {
+            db.collection('loan_repayments').where('status', '==', 'pending').onSnapshot(snap => {
+                const list = document.getElementById('request-list');
+                if(snap.empty) { list.innerHTML = '<p style="text-align:center; padding:50px;">রিকোয়েস্ট নেই</p>'; return; }
+                let html = ''; pendingRequests = [];
+                snap.forEach(doc => {
+                    const d = doc.data(); d.docId = doc.id; pendingRequests.push(d);
+                    html += `<div class="req-card"><div class="req-info"><img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="li-img-${doc.id}" class="req-img"><div><h4>${d.memberName}</h4><p>ID: ${d.memberId} | ৳${d.totalPaid || d.totalAmount}</p></div></div><button class="btn-detail" onclick="openDetails('${doc.id}')">বিস্তারিত</button></div>`;
+                    fetchImg(d.uid, `li-img-${doc.id}`);
+                });
+                list.innerHTML = html;
+            });
+        }
+
+        async function fetchImg(uid, elId) { const u = await db.collection('users').doc(uid).get(); if(u.exists && u.data().photoUrl) document.getElementById(elId).src = u.data().photoUrl; }
+
+        async function openDetails(id) {
+            const r = pendingRequests.find(x => x.docId === id);
+            const uDoc = await db.collection('users').doc(r.uid).get();
+            const currentDue = uDoc.exists ? (uDoc.data().loanDue || 0) : 0;
+            document.getElementById('modal-user-info').innerHTML = `<img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="modal-img" style="width:60px; height:60px; border-radius:50%;"><div><h4>${r.memberName}</h4><p>ID: ${r.memberId}</p><p style="color:red; font-size:11px;">বকেয়া: ৳${currentDue.toFixed(2)}</p></div>`;
+            document.getElementById('modal-details-card').innerHTML = `<div class="detail-item"><span>আসল:</span><span>৳${r.principalAmount}</span></div><div class="detail-item"><span>লভ্যাংশ:</span><span>৳${r.interestAmount}</span></div><div class="detail-item"><span style="color:blue;">সঞ্চয় (সদস্য একাউন্টে যাবে):</span><span>৳${r.savingsAmount}</span></div><div class="detail-item"><span>অতিরিক্ত (+):</span><span>৳${r.extraAmount || 0}</span></div><div class="detail-item"><span>বাকি (-):</span><span>৳${r.shortfallAmount || 0}</span></div><div class="detail-item" style="border:none;"><span style="color:var(--green); font-size:18px;">মোট আদায়:</span><span style="font-size:18px;">৳${(r.totalPaid || r.totalAmount).toFixed(2)}</span></div>`;
+            fetchImg(r.uid, 'modal-img');
+            document.getElementById('btn-approve').onclick = () => {
+                if (currentDue <= 0) return alert("সদস্যের কোনো লোন বাকি নেই!");
+                executeTransaction(r, id);
+            };
+            document.getElementById('btn-reject').onclick = () => db.collection('loan_repayments').doc(id).update({status:'rejected'}).then(closeModal);
+            document.getElementById('detailModal').style.display = 'block';
+        }
+
+        // ================= মূল ব্যাংকিং ট্রানজেকশন লজিক (নিখুঁত ভার্সন) =================
+        async function executeTransaction(data, docId) {
+            const userRef = db.collection('users').doc(data.uid);
+            const fundRef = db.collection('settings').doc('fund');
+            const dateStr = new Date().toLocaleDateString('bn-BD');
+            const isoDate = new Date().toISOString().split('T')[0];
+
+            try {
+                await db.runTransaction(async (t) => {
+                    const uSnap = await t.get(userRef), fSnap = await t.get(fundRef);
+                    const uData = uSnap.data(), curDue = Number(uData.loanDue || 0);
+                    const curFund = fSnap.exists ? fSnap.data().totalAmount : 0;
+
+                    if(curDue <= 0) throw "এই সদস্যের কোনো লোন বাকি নেই!";
+
+                    // লোন থেকে কমার নিট পরিমাণ = (আসল + লাভ + অতিরিক্ত) - বাকি
+                    const loanReduction = Number(((data.principalAmount + data.interestAmount + (data.extraAmount || 0)) - (data.shortfallAmount || data.dueAmount || 0)).toFixed(2));
+                    const savingsPortion = Number((data.savingsAmount || 0).toFixed(2));
+
+                    // আপনার লজিক: লোন আদায় ফান্ডে জমা হবে (+), সঞ্চয় মেম্বার একাউন্টে যাওয়ার কারণে ফান্ড থেকে বিয়োগ হবে (-)
+                    const netFundUpdate = Number((loanReduction - savingsPortion).toFixed(2));
+                    if(curFund + netFundUpdate < 0) throw "ফান্ডে পর্যাপ্ত টাকা নেই!";
+
+                    // ১. সদস্য প্রোফাইল আপডেট
+                    t.update(userRef, { 
+                        loanDue: Number((curDue - loanReduction).toFixed(2)),
+                        loanRepaid: Number(((uData.loanRepaid || 0) + loanReduction).toFixed(2)),
+                        balance: Number(((uData.balance || 0) + savingsPortion).toFixed(2))
+                    });
+
+                    // ২. মাদার ফান্ড আপডেট
+                    t.set(fundRef, { totalAmount: Number((curFund + netFundUpdate).toFixed(2)) }, { merge: true });
+
+                    // ৩. মাদার স্টেটমেন্ট এন্ট্রি ১: লোন কিস্তি আদায় (Credit)
+                    t.set(db.collection('fund_transactions').doc(), {
+                        amount: loanReduction, type: 'deposit', source: `লোন কিস্তি আদায় (${data.memberId})`,
+                        date: isoDate, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // ৪. মাদার স্টেটমেন্ট এন্ট্রি ২: সদস্য সঞ্চয় স্থানান্তর (Debit)
+                    if(savingsPortion > 0) {
+                        t.set(db.collection('fund_transactions').doc(), {
+                            amount: savingsPortion, type: 'withdraw', source: `সদস্য সঞ্চয় জমা (${data.memberId})`,
+                            date: isoDate, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        // সদস্য সেভিংস স্টেটমেন্ট
+                        t.set(db.collection('transactions').doc(), {
+                            uid: data.uid, amount: savingsPortion, type: 'deposit', method: 'Loan Installment (Savings)',
+                            date: dateStr, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+
+                    // ৫. লোন স্টেটমেন্ট রেকর্ড
+                    t.set(db.collection('loan_transactions').doc(), {
+                        uid: data.uid, memberId: data.memberId, amount: loanReduction, type: 'repayment',
+                        principal: data.principalAmount, interest: data.interestAmount, extra: data.extraAmount, shortfall: data.shortfallAmount,
+                        date: dateStr, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    if(docId) t.update(db.collection('loan_repayments').doc(docId), { status: 'approved' });
+                });
+                if(docId) { alert("অ্যাপ্রুভ সফল হয়েছে!"); closeModal(); }
+                else alert("সফল হয়েছে!");
+            } catch (e) { alert(e); }
+        }
+
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+        function downloadImage() {
+            const el = document.getElementById('repayment-receipt');
+            html2canvas(el, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: "#ffffff" }).then(canvas => {
+                const link = document.createElement('a'); link.download = `Receipt_${selectedUser.memberId}.jpg`; link.href = canvas.toDataURL("image/jpeg", 1.0); link.click();
+            });
+        }
+    </script>
+</body>
+</html>

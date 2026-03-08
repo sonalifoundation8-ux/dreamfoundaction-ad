@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+	<link rel="manifest" href="manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অ্যাডমিন লগইন - সোনালী ফাউন্ডেশন</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Noto Sans Bengali', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e272e 0%, #34495e 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .admin-login-card {
+            background: white;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            border-top: 5px solid #d4af37;
+        }
+
+        .admin-icon {
+            width: 70px;
+            height: 70px;
+            
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            margin: 0 auto 20px auto;
+        }
+
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        p {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #34495e;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #d4af37;
+        }
+
+        .btn-admin {
+            width: 100%;
+            padding: 12px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-admin:hover {
+            background: #d4af37;
+        }
+
+        .error-msg {
+            color: red;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            margin-top: 15px;
+            display: none;
+            border: 1px solid red;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="admin-login-card">
+        <div class="admin-icon">
+            <img src="logo.png" style="width: 60px; height: 60px; object-fit: contain;">
+        </div>
+        <h2>অ্যাডমিন প্যানেল</h2>
+        <p>শুধুমাত্র কর্তৃপক্ষের ব্যবহারের জন্য</p>
+
+        <form onsubmit="handleAdminLogin(event)">
+            <div class="input-group">
+                <label>অ্যাডমিন ইমেইল</label>
+                <input type="email" id="admin-email" placeholder="admin@sonali.com" required>
+            </div>
+            <div class="input-group">
+                <label>পাসওয়ার্ড</label>
+                <input type="password" id="admin-password" placeholder="********" required>
+            </div>
+            
+            <button type="submit" id="login-btn" class="btn-admin">লগইন করুন</button>
+            
+            <!-- এরর মেসেজ বক্স -->
+            <div id="error-text" class="error-msg"></div>
+        </form>
+    </div>
+
+    <script>
+        // ============================================
+        // ১. ফায়ারবেস কনফিগারেশন (সরাসরি এখানে বসানো হয়েছে)
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        // ফায়ারবেস অ্যাপ চালু করা (Initialize)
+        // এই লাইনটি আগে মিসিং ছিল বা ফাইল পাচ্ছিল না, তাই এরর আসছিল
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // ডাটাবেজ রেফারেন্স
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // ============================================
+        // ২. লগইন ফাংশন
+        // ============================================
+        async function handleAdminLogin(e) {
+            e.preventDefault(); // পেজ রিলোড বন্ধ করা
+
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            const btn = document.getElementById('login-btn');
+            const errorDiv = document.getElementById('error-text');
+
+            // লোডিং ইফেক্ট
+            btn.innerHTML = 'যাচাই করা হচ্ছে... <i class="fa fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+            errorDiv.style.display = 'none';
+
+            try {
+                // ক. ইমেইল পাসওয়ার্ড দিয়ে লগইন চেক
+                const userCred = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCred.user;
+
+                // খ. ডাটাবেজে চেক করা এই ইউজারটি আসলেই অ্যাডমিন কি না
+                const doc = await db.collection('users').doc(user.uid).get();
+
+                if (doc.exists) {
+                    const userData = doc.data();
+                    
+                    // রোল চেক (Role Check)
+                    if (userData.role === 'admin') {
+                        // সফল হলে ড্যাশবোর্ডে রিডাইরেক্ট
+                        window.location.href = "dashboard.html"; 
+                    } else {
+                        // যদি মেম্বার হয় কিন্তু অ্যাডমিন প্যানেলে ঢুকতে চায়
+                        throw new Error("আপনার এই প্যানেলে প্রবেশের অনুমতি নেই! (You are not an Admin)");
+                    }
+                } else {
+                    throw new Error("ব্যবহারকারীর কোনো তথ্য ডাটাবেজে পাওয়া যায়নি!");
+                }
+
+            } catch (error) {
+                console.error(error);
+                
+                // ডিফল্ট একটি মেসেজ রাখা হচ্ছে
+                let msg = "ইমেইল বা পাসওয়ার্ড ভুল হয়েছে।"; 
+
+                // ফায়ারবেসের নতুন সিকিউরিটি আপডেট অনুযায়ী এই কোডটি আসে
+                if (error.code === 'auth/invalid-login-credentials') {
+                    msg = "ইমেইল বা পাসওয়ার্ড ভুল হয়েছে। আবার চেষ্টা করুন।";
+                } 
+                else if (error.code === 'auth/user-not-found') {
+                    msg = "এই ইমেইলে কোনো একাউন্ট নেই।";
+                } 
+                else if (error.code === 'auth/wrong-password') {
+                    msg = "পাসওয়ার্ড ভুল হয়েছে।";
+                } 
+                else if (error.code === 'auth/network-request-failed') {
+                    msg = "ইন্টারনেট কানেকশন চেক করুন।";
+                } 
+                else if (error.code === 'auth/too-many-requests') {
+                    msg = "বেশিবার ভুল করার কারণে একাউন্ট সাময়িকভাবে ব্লক হয়েছে। একটু পরে চেষ্টা করুন।";
+                }
+
+                errorDiv.innerText = msg;
+                errorDiv.style.display = 'block';
+                
+                // ভুল করলে লগআউট করে দেওয়া
+                auth.signOut();
+            } finally {
+                btn.innerHTML = 'লগইন করুন';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

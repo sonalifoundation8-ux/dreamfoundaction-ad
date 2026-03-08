@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন স্টেটমেন্ট - ড্রিম ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase & PDF Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
+
+        :root {
+            --gold: #c5a059;
+            --dark-blue: #2c3e50;
+            --bg-gray: #f4f6f9;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg-gray); padding: 10px; }
+
+        #report-wrapper { display: none; max-width: 850px; margin: auto; }
+
+        .statement-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            width: 100%;
+        }
+
+        /* --- Header Box: Foundation & Member Info in ONE ROW --- */
+        .header-box {
+            border: 2px solid var(--gold);
+            border-radius: 20px;
+            padding: 10px 15px;
+            display: flex;
+            flex-direction: row; /* Always Row */
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 5px;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .header-left img { width: 45px; height: 45px; object-fit: contain; }
+        .org-name { color: var(--gold); font-size: 16px; font-weight: 800; line-height: 1.1; }
+        .address { color: #888; font-size: 10px; font-weight: 500; }
+
+        .header-right { display: flex; align-items: center; gap: 8px; text-align: right; flex: 1; justify-content: flex-end; }
+        .id-badge { background: #1f2937; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; display: inline-block; }
+        .member-name { font-size: 13px; font-weight: 800; color: #333; white-space: nowrap; }
+        .m-photo { width: 50px; height: 50px; border-radius: 50%; border: 1px solid #ddd; object-fit: cover; }
+
+        /* Date Range Pill */
+        .date-bar {
+            background: #f1f3f5;
+            padding: 6px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        /* --- Summary: 3 Columns Always Side by Side --- */
+        .summary-container { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); /* Always 3 Columns */
+            gap: 8px; 
+            margin-bottom: 20px; 
+        }
+        .sum-box {
+            border: 1.5px solid var(--gold);
+            border-radius: 12px;
+            padding: 10px 2px;
+            text-align: center;
+        }
+        .sum-box span { font-size: 9px; color: #666; font-weight: 700; display: block; margin-bottom: 5px; line-height: 1.2; }
+        .sum-box h3 { font-size: 14px; font-weight: 800; color: #222; }
+
+        /* Ledger Table */
+        .ledger-table { width: 100%; border-collapse: collapse; }
+        .ledger-table th { background: #f8f9fa; color: #555; padding: 10px 4px; font-size: 11px; border-bottom: 1px solid #eee; }
+        .ledger-table td { padding: 12px 4px; font-size: 12px; border-bottom: 1px solid #f2f2f2; text-align: center; color: #333; }
+        
+        .val-red { color: #e74c3c; font-weight: 800; }
+        .val-green { color: #27ae60; font-weight: 800; }
+        .val-balance { font-weight: 800; color: #000; }
+
+        /* Action Buttons */
+        .btn-group { display: flex; justify-content: center; gap: 10px; margin-top: 20px; padding-bottom: 30px; }
+        .btn { border: none; padding: 10px 20px; border-radius: 25px; font-weight: 700; cursor: pointer; font-size: 13px; color: #fff; display: flex; align-items: center; gap: 6px; }
+        .btn-print { background: #2c3e50; }
+        .btn-pdf { background: #d4af37; }
+
+        /* Search Screen Styles */
+        .search-card { max-width: 450px; margin: 30px auto; background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .form-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; outline: none; }
+        .btn-submit { width: 100%; background: var(--gold); color: #fff; border: none; padding: 13px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+
+        /* PDF & Print Perfection */
+        @media print {
+            body { background: #fff; padding: 0; }
+            .btn-group, .search-card { display: none !important; }
+            .statement-card { box-shadow: none; border: none; padding: 10px; width: 100%; }
+        }
+
+        /* Desktop Adjustments */
+        @media (min-width: 600px) {
+            .org-name { font-size: 22px; }
+            .address { font-size: 13px; }
+            .member-name { font-size: 16px; }
+            .id-badge { font-size: 13px; }
+            .sum-box span { font-size: 12px; }
+            .sum-box h3 { font-size: 20px; }
+            .header-left img { width: 55px; height: 55px; }
+            .m-photo { width: 65px; height: 65px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Search Section -->
+    <div class="search-card" id="search-section">
+        <h2 style="text-align: center; margin-bottom: 20px; color: var(--gold);">স্টেটমেন্ট সার্চ</h2>
+        <input type="text" id="memberIdInput" class="form-input" placeholder="সদস্য আইডি (যেমন: SF-002)">
+        <div style="display: flex; gap: 10px;">
+            <input type="date" id="startDate" class="form-input">
+            <input type="date" id="endDate" class="form-input">
+        </div>
+        <button class="btn-submit" onclick="generateStatement()">রিপোর্ট দেখুন</button>
+    </div>
+
+    <!-- Statement Section -->
+    <div id="report-wrapper">
+        <div class="statement-card" id="printArea">
+            
+            <!-- Header Box: Side by Side even on Mobile -->
+            <div class="header-box">
+                <div class="header-left">
+                    <img src="" id="fLogo">
+                    <div>
+                        <div class="org-name" id="fName">...</div>
+                        <div class="address" id="fAddress">Bahubal, Habiganj</div>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div>
+                        <span class="id-badge" id="mIdDisplay">ID: ---</span><br>
+                        <span class="member-name" id="mNameDisplay">...</span>
+                    </div>
+                    <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="mPhoto" class="m-photo">
+                </div>
+            </div>
+
+            <!-- Date Range -->
+            <div class="date-bar">
+                <i class="fa-solid fa-calendar-days"></i> &nbsp; সময়কাল: <span id="dateText">---</span>
+            </div>
+
+            <!-- Summary: 3 Columns Side by Side even on Mobile -->
+            <div class="summary-container">
+                <div class="sum-box">
+                    <span>মোট অনুমোদিত লোন</span>
+                    <h3 id="sum-disburse">৳ ০</h3>
+                </div>
+                <div class="sum-box">
+                    <span>মোট পরিশোধ</span>
+                    <h3 id="sum-repaid" style="color: #27ae60;">৳ ০</h3>
+                </div>
+                <div class="sum-box">
+                    <span>বকেয়া লোন</span>
+                    <h3 id="sum-due" style="color: #e74c3c;">৳ ০</h3>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table class="ledger-table">
+                <thead>
+                    <tr>
+                        <th>নং</th>
+                        <th>তারিখ</th>
+                        <th style="text-align: left;">বিবরণ</th>
+                        <th>টাকা</th>
+                        <th>ব্যালেন্স</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Buttons -->
+        <div class="btn-group">
+            <button class="btn btn-print" onclick="window.print()">
+                <i class="fa-solid fa-print"></i> প্রিন্ট
+            </button>
+            <button class="btn btn-pdf" onclick="downloadPDF()">
+                <i class="fa-solid fa-file-pdf"></i> PDF ডাউনলোড
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        db.collection('settings').doc('appInfo').get().then(doc => {
+            if(doc.exists) {
+                document.getElementById('fName').innerText = doc.data().orgName;
+                document.getElementById('fLogo').src = doc.data().logoUrl;
+                document.getElementById('fAddress').innerText = doc.data().address || "Bahubal, Habiganj";
+            }
+        });
+
+        async function generateStatement() {
+            const mId = document.getElementById('memberIdInput').value.trim().toUpperCase();
+            const sD = document.getElementById('startDate').value;
+            const eD = document.getElementById('endDate').value;
+
+            if(!mId || !sD || !eD) return alert("তথ্য দিন!");
+
+            try {
+                const uSnap = await db.collection('users').where('memberId', '==', mId).get();
+                if(uSnap.empty) throw new Error("সদস্য পাওয়া যায়নি!");
+                
+                const user = uSnap.docs[0].data();
+                document.getElementById('mNameDisplay').innerText = user.fullName;
+                document.getElementById('mIdDisplay').innerText = "ID: " + user.memberId;
+                if(user.photoUrl) document.getElementById('mPhoto').src = user.photoUrl;
+
+                const txSnap = await db.collection('loan_transactions').where('uid', '==', uSnap.docs[0].id).get();
+                let txs = [];
+                txSnap.forEach(d => {
+                    let data = d.data();
+                    let val = (Number(data.principal || 0) + Number(data.interest || 0)) - Number(data.shortfall || 0);
+                    txs.push({
+                        ts: data.timestamp ? data.timestamp.seconds * 1000 : new Date(data.date).getTime(),
+                        date: data.date,
+                        type: data.type,
+                        amount: data.type === 'disbursement' ? Number(data.totalWithInterest || data.amount) : val
+                    });
+                });
+                txs.sort((a, b) => a.ts - b.ts);
+
+                let curDue = 0, totalD = 0, totalR = 0, sl = 1, html = '';
+                const fs = new Date(sD).getTime();
+                const fe = new Date(eD).setHours(23,59,59);
+
+                txs.forEach(t => {
+                    if(t.type === 'disbursement') curDue += t.amount; else curDue -= t.amount;
+                    if(t.ts >= fs && t.ts <= fe) {
+                        if(t.type === 'disbursement') totalD += t.amount; else totalR += t.amount;
+                        html += `<tr>
+                            <td>${sl++}</td>
+                            <td>${t.date}</td>
+                            <td style="text-align:left;">${t.type==='disbursement' ? 'লোন গ্রহণ' : 'কিস্তি পরিশোধ'}</td>
+                            <td class="${t.type==='disbursement' ? 'val-red' : 'val-green'}">${t.type==='disbursement' ? '-' : '+'}${t.amount}</td>
+                            <td class="val-balance">${Math.max(0, curDue)}</td>
+                        </tr>`;
+                    }
+                });
+
+                document.getElementById('ledgerBody').innerHTML = html;
+                document.getElementById('sum-disburse').innerText = "৳ " + totalD;
+                document.getElementById('sum-repaid').innerText = "৳ " + totalR;
+                document.getElementById('sum-due').innerText = "৳ " + Math.max(0, curDue);
+                document.getElementById('dateText').innerText = `${sD} হতে ${eD}`;
+                document.getElementById('search-section').style.display = 'none';
+                document.getElementById('report-wrapper').style.display = 'block';
+            } catch (e) { alert(e.message); }
+        }
+
+        function downloadPDF() {
+            const element = document.getElementById('printArea');
+            html2pdf().set({
+                margin: 5,
+                filename: 'Statement.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).save();
+        }
+    </script>
+</body>
+</html>

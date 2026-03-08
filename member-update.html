@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্য তথ্য আপডেট - সোনালী ফাউন্ডেশন</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #2c3e50;
+            --light: #f4f6f9;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--light); padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; cursor: pointer; text-decoration: none; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* Search Section */
+        .search-container { padding: 20px; max-width: 500px; margin: auto; }
+        .search-box {
+            display: flex; background: white; padding: 5px; border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid var(--gold);
+        }
+        .search-box input {
+            flex: 1; border: none; outline: none; padding: 10px 20px; font-size: 16px; border-radius: 30px;
+        }
+        .search-btn {
+            background: var(--gold); color: white; border: none; padding: 10px 25px;
+            border-radius: 30px; cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        .search-btn:hover { background: var(--dark); }
+
+        /* Result Card */
+        #result-card {
+            max-width: 500px; margin: 20px auto; background: white; border-radius: 15px;
+            padding: 20px; display: none; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            border-top: 5px solid var(--gold);
+        }
+        .member-img {
+            width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--gold);
+            object-fit: cover; margin-bottom: 10px;
+        }
+        .member-name { font-size: 18px; color: var(--dark); font-weight: bold; }
+        .member-phone { color: #666; font-size: 14px; margin-bottom: 15px; }
+        .btn-edit {
+            background: var(--dark); color: white; border: none; padding: 8px 20px;
+            border-radius: 5px; cursor: pointer; font-weight: bold;
+        }
+
+        /* Update Form Section */
+        #update-form-section {
+            max-width: 600px; margin: 20px auto; background: white; border-radius: 15px;
+            padding: 25px; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .form-title {
+            font-size: 16px; font-weight: bold; color: var(--gold);
+            margin-bottom: 15px; border-bottom: 2px solid var(--light); padding-bottom: 10px;
+        }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px; }
+        .form-control {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; outline: none; transition: 0.3s;
+        }
+        .form-control:focus { border-color: var(--gold); }
+        .full-width { grid-column: span 2; }
+
+        .btn-update {
+            width: 100%; padding: 15px; background: var(--gold); color: white;
+            border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; margin-top: 10px;
+        }
+        .btn-update:hover { background: #b8961d; }
+
+        @media (max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">সদস্য তথ্য আপডেট</div>
+    </div>
+
+    <!-- Search Section -->
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="searchId" placeholder="সদস্য আইডি দিন (যেমন: SF-001)">
+            <button class="search-btn" onclick="searchMember()">খুঁজুন</button>
+        </div>
+    </div>
+
+    <!-- Result Display Card -->
+    <div id="result-card">
+        <img src="" id="res-img" class="member-img">
+        <div class="member-name" id="res-name">নাম লোড হচ্ছে...</div>
+        <div class="member-phone" id="res-phone">০১৭...</div>
+        <button class="btn-edit" onclick="showEditForm()"><i class="fa-solid fa-user-pen"></i> এডিট করুন</button>
+    </div>
+
+    <!-- Update Form -->
+    <div id="update-form-section">
+        <form id="updateMemberForm">
+            <!-- ব্যক্তিগত তথ্য -->
+            <div class="form-title">সদস্যের ব্যক্তিগত তথ্য</div>
+            <div class="form-grid">
+                <div class="form-group"><label>পূর্ণ নাম</label><input type="text" id="u-name" class="form-control"></div>
+                <div class="form-group"><label>মোবাইল নাম্বার</label><input type="text" id="u-phone" class="form-control"></div>
+                <div class="form-group"><label>পিতার নাম</label><input type="text" id="u-father" class="form-control"></div>
+                <div class="form-group"><label>মাতার নাম</label><input type="text" id="u-mother" class="form-control"></div>
+                <div class="form-group"><label>জাতীয় পরিচয়পত্র (NID)</label><input type="text" id="u-nid" class="form-control"></div>
+                <div class="form-group"><label>পেশা</label><input type="text" id="u-job" class="form-control"></div>
+            </div>
+
+            <!-- ঠিকানা -->
+            <div class="form-title">ঠিকানা তথ্য</div>
+            <div class="form-grid">
+                <div class="form-group"><label>জেলা</label><input type="text" id="u-district" class="form-control"></div>
+                <div class="form-group"><label>থানা</label><input type="text" id="u-thana" class="form-control"></div>
+                <div class="form-group"><label>ইউনিয়ন/পৌরসভা</label><input type="text" id="u-union" class="form-control"></div>
+                <div class="form-group"><label>গ্রাম/মহল্লা</label><input type="text" id="u-village" class="form-control"></div>
+                <div class="form-group full-width"><label>বিস্তারিত বর্তমান ঠিকানা</label><textarea id="u-address" class="form-control" rows="2"></textarea></div>
+            </div>
+
+            <!-- নমিনি তথ্য -->
+            <div class="form-title">নমিনির তথ্য</div>
+            <div class="form-grid">
+                <div class="form-group"><label>নমিনির নাম</label><input type="text" id="u-nom-name" class="form-control"></div>
+                <div class="form-group"><label>সম্পর্ক</label><input type="text" id="u-nom-rel" class="form-control"></div>
+                <div class="form-group"><label>নমিনির মোবাইল</label><input type="text" id="u-nom-phone" class="form-control"></div>
+            </div>
+
+            <button type="button" class="btn-update" onclick="saveChanges()">তথ্য আপডেট করুন</button>
+        </form>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        let targetDocId = null; // যে মেম্বারকে এডিট করা হবে তার ডকুমেন্ট আইডি
+
+        // ১. সদস্য সার্চ ফাংশন
+        async function searchMember() {
+            const memberId = document.getElementById('searchId').value.trim();
+            if (!memberId) return alert("দয়া করে আইডি নম্বর লিখুন।");
+
+            const card = document.getElementById('result-card');
+            const form = document.getElementById('update-form-section');
+            card.style.display = "none";
+            form.style.display = "none";
+
+            try {
+                // memberId অনুযায়ী কোয়েরি
+                const q = await db.collection('users').where('memberId', '==', memberId).get();
+
+                if (q.empty) {
+                    alert("এই আইডির কোনো সদস্য পাওয়া যায়নি!");
+                } else {
+                    const doc = q.docs[0];
+                    const data = doc.data();
+                    targetDocId = doc.id; // সেভ করে রাখা হলো পরে আপডেটের জন্য
+
+                    // কার্ডে ডাটা বসানো
+                    document.getElementById('res-img').src = data.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+                    document.getElementById('res-name').innerText = data.fullName;
+                    document.getElementById('res-phone').innerText = data.phone;
+                    card.style.display = "block";
+
+                    // ফর্ম প্রি-ফিল করা (Pre-fill)
+                    preFillForm(data);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("সার্চ করার সময় সমস্যা হয়েছে।");
+            }
+        }
+
+        // ২. ফর্মে ডাটা বসানো
+        function preFillForm(data) {
+            document.getElementById('u-name').value = data.fullName || '';
+            document.getElementById('u-phone').value = data.phone || '';
+            document.getElementById('u-father').value = data.fatherName || '';
+            document.getElementById('u-mother').value = data.motherName || '';
+            document.getElementById('u-nid').value = data.nid || '';
+            document.getElementById('u-job').value = data.occupation || '';
+            
+            document.getElementById('u-district').value = data.district || '';
+            document.getElementById('u-thana').value = data.thana || '';
+            document.getElementById('u-union').value = data.union || '';
+            document.getElementById('u-village').value = data.village || '';
+            document.getElementById('u-address').value = data.address || '';
+
+            document.getElementById('u-nom-name').value = data.nomineeName || '';
+            document.getElementById('u-nom-rel').value = data.nomineeRelation || '';
+            document.getElementById('u-nom-phone').value = data.nomineePhone || '';
+        }
+
+        // ৩. এডিট ফর্ম দেখানো
+        function showEditForm() {
+            document.getElementById('update-form-section').style.display = "block";
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+
+        // ৪. পরিবর্তন সেভ করা
+        async function saveChanges() {
+            if (!targetDocId) return;
+
+            const btn = document.querySelector('.btn-update');
+            btn.innerText = "আপডেট হচ্ছে...";
+            btn.disabled = true;
+
+            const updatedData = {
+                fullName: document.getElementById('u-name').value,
+                phone: document.getElementById('u-phone').value,
+                fatherName: document.getElementById('u-father').value,
+                motherName: document.getElementById('u-mother').value,
+                nid: document.getElementById('u-nid').value,
+                occupation: document.getElementById('u-job').value,
+                district: document.getElementById('u-district').value,
+                thana: document.getElementById('u-thana').value,
+                union: document.getElementById('u-union').value,
+                village: document.getElementById('u-village').value,
+                address: document.getElementById('u-address').value,
+                nomineeName: document.getElementById('u-nom-name').value,
+                nomineeRelation: document.getElementById('u-nom-rel').value,
+                nomineePhone: document.getElementById('u-nom-phone').value,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            try {
+                await db.collection('users').doc(targetDocId).update(updatedData);
+                alert("সদস্যের তথ্য সফলভাবে আপডেট করা হয়েছে!");
+                location.reload(); // পেজ রিফ্রেশ করে আগের অবস্থায় ফেরা
+            } catch (err) {
+                console.error(err);
+                alert("আপডেট করতে সমস্যা হয়েছে।");
+                btn.innerText = "তথ্য আপডেট করুন";
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্য জমা - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- HTML2Canvas Library for Image Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #2c3e50;
+            --light: #f4f6f9;
+            --green: #27ae60;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--light); padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; cursor: pointer; text-decoration: none; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* Main Container */
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+
+        /* Search Section */
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--gold); margin-bottom: 20px; }
+        .form-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #555; }
+        .search-group { display: flex; gap: 10px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 15px; }
+        .btn-search { background: var(--dark); color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; }
+
+        /* Result Section */
+        #member-result { display: none; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        .member-img { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; margin-bottom: 10px; }
+        .member-name { font-size: 16px; font-weight: bold; color: var(--dark); }
+        .member-id { font-size: 12px; color: var(--gold); font-weight: bold; }
+
+        /* Deposit Form */
+        #deposit-form-area { display: none; }
+        .btn-submit { width: 100%; padding: 14px; background: var(--gold); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        .btn-submit:hover { background: #b8961d; }
+
+        /* ================= Slip Styling (Image Ready) ================= */
+        #slip-area { display: none; margin-top: 20px; }
+        
+        .smart-slip {
+            background: white; padding: 25px; border: 2px solid var(--gold); border-radius: 12px;
+            position: relative; overflow: hidden; 
+            /* White background is crucial for JPG download */
+            background-color: #ffffff; 
+        }
+        
+        .watermark { position: absolute; top: 40%; left: 10%; font-size: 50px; color: rgba(212,175,55,0.05); transform: rotate(-30deg); font-weight: bold; pointer-events: none; z-index: 1; }
+        
+        .slip-head { text-align: center; border-bottom: 2px solid #f1f1f1; padding-bottom: 10px; margin-bottom: 15px; position: relative; z-index: 2; }
+        
+        /* Round Logo */
+        .slip-logo { 
+            width: 60px; height: 60px; border-radius: 50%; object-fit: cover; 
+            border: 2px solid var(--gold); margin-bottom: 5px; 
+            display: block; margin-left: auto; margin-right: auto;
+        }
+        
+        .slip-table { width: 100%; font-size: 14px; border-collapse: collapse; position: relative; z-index: 2; }
+        .slip-table td { padding: 8px 0; border-bottom: 1px dashed #eee; }
+        .slip-table td:last-child { text-align: right; font-weight: bold; }
+        
+        .amount-row { background: #fffdf5; padding: 10px; border-radius: 8px; text-align: center; margin-top: 15px; border: 1px solid var(--gold); position: relative; z-index: 2; }
+        .amount-row h2 { color: var(--dark); margin-top: 5px; font-weight: 800; }
+        
+        .btn-download { width: 100%; padding: 12px; background: var(--dark); color: white; border: none; border-radius: 8px; margin-top: 15px; cursor: pointer; font-weight: bold; }
+
+        .spinner { display: none; margin-left: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">সদস্য টাকা জমা</div>
+    </div>
+
+    <div class="container">
+        <!-- Search Card -->
+        <div class="card">
+            <label class="form-label">সদস্য আইডি দিয়ে খুঁজুন</label>
+            <div class="search-group">
+                <input type="text" id="memberSearchId" class="form-control" placeholder="যেমন: SF-001">
+                <button class="btn-search" onclick="searchMember()">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Deposit Form Card -->
+        <div class="card" id="deposit-form-area">
+            <div id="member-result">
+                <img src="" id="m-img" class="member-img">
+                <div class="member-name" id="m-name">---</div>
+                <div class="member-id" id="m-id">---</div>
+                <div style="font-size: 12px; color: #777;" id="m-phone">---</div>
+            </div>
+
+            <form onsubmit="handleDeposit(event)">
+                <div style="margin-bottom: 15px;">
+                    <label class="form-label">জমার পরিমাণ (৳)</label>
+                    <input type="number" id="dep-amount" class="form-control" placeholder="টাকার অংক লিখুন" required>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label class="form-label">টাকা পাওয়ার মাধ্যম</label>
+                    <!-- Account Method Added -->
+                    <select id="dep-method" class="form-control" required>
+                        <option value="Cash">ক্যাশ (হাতে হাতে)</option>
+                        <option value="bKash">বিকাশ</option>
+                        <option value="Nagad">নগদ</option>
+                        <option value="Rocket">রকেট</option>
+                        <option value="Account">ব্যাংক একাউন্ট</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="submit-btn" class="btn-submit">
+                    জমা নিশ্চিত করুন <i class="fa-solid fa-circle-notch fa-spin spinner" id="btn-loader"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Slip Download Area -->
+        <div id="slip-area">
+            <!-- This container will be converted to Image -->
+            <div class="smart-slip" id="money-slip">
+                <div class="watermark">ড্রিম ফাউন্ডেশন</div>
+                
+                <div class="slip-head">
+                    <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="slip-logo-img" class="slip-logo" crossorigin="anonymous">
+                    <h3 id="slip-org-name" style="color: var(--gold);">ড্রিম ফাউন্ডেশন</h3>
+                    <p style="font-size: 11px; color: #888;">অফিসিয়াল জমা রশিদ</p>
+                </div>
+                
+                <table class="slip-table">
+                    <tr><td>তারিখ:</td><td id="s-date">---</td></tr>
+                    <tr><td>সদস্য আইডি:</td><td id="s-id">---</td></tr>
+                    <tr><td>নাম:</td><td id="s-name">---</td></tr>
+                    <tr><td>মাধ্যম:</td><td id="s-method">---</td></tr>
+                    <tr><td>বিবরণ:</td><td>সেভিংস জমা</td></tr>
+                    <tr><td>স্ট্যাটাস:</td><td style="color: var(--green);">সফল (Success)</td></tr>
+                </table>
+                
+                <div class="amount-row">
+                    <span style="font-size: 11px; color: #666; font-weight: bold;">জমার পরিমাণ</span>
+                    <h2 id="s-amount">৳ ০.০০</h2>
+                </div>
+                
+                <p style="text-align: center; font-size: 10px; color: #aaa; margin-top: 20px;">এটি একটি কম্পিউটার জেনারেটেড রশিদ।</p>
+            </div>
+            
+            <button class="btn-download" onclick="downloadImage()">
+                <i class="fa-solid fa-image"></i> ছবি হিসেবে ডাউনলোড করুন
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        let selectedUser = null;
+
+        // ১. সদস্য সার্চ
+        async function searchMember() {
+            const memberId = document.getElementById('memberSearchId').value.trim();
+            if (!memberId) return alert("আইডি লিখুন!");
+
+            document.getElementById('deposit-form-area').style.display = "none";
+            document.getElementById('slip-area').style.display = "none";
+
+            try {
+                const q = await db.collection('users').where('memberId', '==', memberId).get();
+                if (q.empty) return alert("সদস্য পাওয়া যায়নি!");
+
+                const doc = q.docs[0];
+                selectedUser = { id: doc.id, ...doc.data() };
+
+                document.getElementById('m-img').src = selectedUser.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+                document.getElementById('m-name').innerText = selectedUser.fullName;
+                document.getElementById('m-id').innerText = selectedUser.memberId;
+                document.getElementById('m-phone').innerText = selectedUser.phone;
+
+                document.getElementById('member-result').style.display = "block";
+                document.getElementById('deposit-form-area').style.display = "block";
+                
+                // স্লিভ লোগো আপডেট
+                db.collection('settings').doc('appInfo').get().then(sDoc => {
+                    if(sDoc.exists){
+                        document.getElementById('slip-org-name').innerText = sDoc.data().orgName;
+                        if(sDoc.data().logoUrl) {
+                            // CORS bypass for image download
+                            document.getElementById('slip-logo-img').src = sDoc.data().logoUrl + '?t=' + new Date().getTime();
+                        }
+                    }
+                });
+
+            } catch (err) { alert("Error: " + err.message); }
+        }
+
+        // ২. জমা সাবমিট (সংশোধিত লজিক: ফান্ড মাইনাস, মেম্বার প্লাস)
+        async function handleDeposit(e) {
+            e.preventDefault();
+            if (!selectedUser) return;
+
+            const amount = Number(document.getElementById('dep-amount').value);
+            const method = document.getElementById('dep-method').value;
+            const loader = document.getElementById('btn-loader');
+            const submitBtn = document.getElementById('submit-btn');
+
+            if (amount <= 0) return alert("সঠিক পরিমাণ লিখুন!");
+
+            loader.style.display = "inline-block";
+            submitBtn.disabled = true;
+
+            const date = new Date().toLocaleDateString('bn-BD');
+            const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+            try {
+                const userRef = db.collection('users').doc(selectedUser.id);
+                const fundRef = db.collection('settings').doc('fund');
+
+                await db.runTransaction(async (t) => {
+                    const uDoc = await t.get(userRef);
+                    const fDoc = await t.get(fundRef);
+
+                    // মাদার ফান্ড চেক
+                    const currentFund = fDoc.exists ? Number(fDoc.data().totalAmount || 0) : 0;
+                    
+                    if (currentFund < amount) {
+                        throw "ফান্ডে পর্যাপ্ত টাকা নেই! বর্তমান ফান্ড: ৳" + currentFund;
+                    }
+
+                    // লজিক আপডেট:
+                    // ১. ফান্ড থেকে টাকা মাইনাস হবে (কারণ মেম্বারকে দেওয়া হচ্ছে না, মেম্বারের একাউন্টে ব্যালেন্স হিসেবে জমা হচ্ছে যা ফান্ডের দায়)
+                    t.set(fundRef, { totalAmount: currentFund - amount }, { merge: true });
+
+                    // ২. সদস্যের ব্যালেন্স প্লাস হবে
+                    const currentBalance = Number(uDoc.data().balance || 0);
+                    t.update(userRef, { balance: currentBalance + amount });
+
+                    // ৩. মাদার স্টেটমেন্ট এন্ট্রি (ফান্ড থেকে আউট - Withdraw)
+                    const motherTxRef = db.collection('fund_transactions').doc();
+                    t.set(motherTxRef, {
+                        amount: amount,
+                        type: 'withdraw', // Fund Out
+                        source: `সদস্য জমা (${selectedUser.memberId})`,
+                        date: date,
+                        timestamp: timestamp
+                    });
+
+                    // ৪. মেম্বার ট্রানজেকশন হিস্ট্রি (Deposit - Member Received)
+                    const txRef = db.collection('transactions').doc();
+                    t.set(txRef, {
+                        uid: selectedUser.id,
+                        memberName: selectedUser.fullName,
+                        memberId: selectedUser.memberId,
+                        amount: amount,
+                        method: method,
+                        type: 'deposit',
+                        date: date,
+                        timestamp: timestamp,
+                        addedBy: 'Admin'
+                    });
+                });
+
+                // স্লিপ ডাটা সেট করা
+                document.getElementById('s-date').innerText = date;
+                document.getElementById('s-id').innerText = selectedUser.memberId;
+                document.getElementById('s-name').innerText = selectedUser.fullName;
+                document.getElementById('s-method').innerText = method;
+                document.getElementById('s-amount').innerText = "৳ " + amount.toFixed(2);
+
+                alert("টাকা সফলভাবে জমা হয়েছে এবং ফান্ড আপডেট হয়েছে!");
+                
+                document.getElementById('deposit-form-area').style.display = "none";
+                document.getElementById('slip-area').style.display = "block";
+
+            } catch (err) {
+                alert("ব্যর্থ হয়েছে: " + err); // Shows "ফান্ডে পর্যাপ্ত টাকা নেই" if fund is low
+            } finally {
+                loader.style.display = "none";
+                submitBtn.disabled = false;
+            }
+        }
+
+        // ৩. ইমেজ ডাউনলোড লজিক
+        function downloadImage() {
+            const element = document.getElementById('money-slip');
+            
+            html2canvas(element, { 
+                scale: 2, 
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: "#ffffff"
+            }).then(canvas => {
+                const imgData = canvas.toDataURL("image/jpeg", 1.0);
+                const link = document.createElement('a');
+                link.download = `Deposit_Slip_${selectedUser.memberId}.jpg`;
+                link.href = imgData;
+                link.click();
+            }).catch(err => {
+                console.error(err);
+                alert("ছবি ডাউনলোড করতে সমস্যা হয়েছে।");
+            });
+        }
+    </script>
+</body>
+</html>

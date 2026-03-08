@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন অনুমোদন - সোনালী ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --gold-dark: #b8860b; --dark: #1a252f; --bg: #f4f7f6; --green: #27ae60; --red: #c0392b; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        .page-header { background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .request-container { padding: 20px; max-width: 800px; margin: auto; }
+        .req-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid var(--gold); }
+        .req-img { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold); }
+
+        .full-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; overflow-y: auto; }
+        .modal-nav { padding: 15px 20px; background: var(--dark); color: white; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 2100; }
+        .modal-content { padding: 20px; max-width: 900px; margin: auto; }
+        
+        /* Layout for Details */
+        .detail-section { background: #fffdf5; border: 1.5px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .sec-title { font-size: 16px; font-weight: bold; color: var(--gold-dark); border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+        .info-item { border-bottom: 1px dashed #ddd; padding: 6px 0; display: flex; justify-content: space-between; font-size: 13px; }
+        .label { color: #777; font-weight: 600; width: 45%; }
+        .val { color: #333; font-weight: bold; text-align: right; width: 55%; word-break: break-all; }
+
+        .doc-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
+        .doc-box { text-align: center; border: 1px solid #eee; padding: 5px; border-radius: 8px; background: #fff; }
+        .doc-img { width: 100%; height: 120px; object-fit: cover; border-radius: 5px; cursor: pointer; }
+        .doc-label { font-size: 10px; color: #888; margin-top: 5px; }
+
+        /* Signature Section */
+        #signature-area { display: none; margin-top: 20px; padding: 20px; background: #fff; border: 2px solid var(--gold); border-radius: 15px; }
+        canvas { border: 1px solid #ccc; background: #f9f9f9; border-radius: 5px; width: 100%; height: 150px; touch-action: none; }
+        .sig-box { text-align: center; }
+        .sig-label { font-size: 14px; font-weight: bold; margin-bottom: 10px; display: block; }
+
+        .btn-action { flex: 1; padding: 15px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-approve { background: var(--green); }
+        .btn-reject { background: var(--red); }
+        .btn-download { background: var(--dark); }
+        .modal-footer { display: flex; gap: 15px; padding: 20px; position: sticky; bottom: 0; background: white; box-shadow: 0 -5px 15px rgba(0,0,0,0.05); z-index: 2200; }
+
+        .pdf-sig-preview { width: 100%; height: 80px; object-fit: contain; }
+
+        @media (max-width: 600px) { .info-grid { grid-template-columns: 1fr; } .doc-gallery { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" style="color:var(--dark); text-decoration:none;"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="nav-title" style="margin-left:15px; font-weight:bold;">লোন আবেদনসমূহ</div>
+    </div>
+
+    <div class="request-container" id="loan-list-div">
+        <p style="text-align: center; margin-top: 50px; color: #999;">লোন রিকোয়েস্ট লোড হচ্ছে...</p>
+    </div>
+
+    <!-- ================= FULL PAGE MODAL ================= -->
+    <div id="detailModal" class="full-modal">
+        <div class="modal-nav">
+            <i class="fa-solid fa-xmark" style="font-size:24px; cursor:pointer;" onclick="closeModal()"></i>
+            <span style="font-weight: bold;">লোন মঞ্জুরিকরণ ফরম</span>
+            <span></span>
+        </div>
+
+        <div class="modal-content" id="report-paper">
+            <div id="modal-data-body">
+                <!-- Data will be loaded here -->
+            </div>
+
+            <!-- Signature Preview for PDF -->
+            <div id="pdf-signature-view" style="display: none; margin-top: 40px; border-top: 2px solid #000; padding-top: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; text-align: center;">
+                    <div>
+                        <img id="pdf-sig-manager" class="pdf-sig-preview">
+                        <p style="font-weight: bold; border-top: 1px solid #000; display: inline-block; padding-top: 5px;">ম্যানেজারের স্বাক্ষর</p>
+                    </div>
+                    <div>
+                        <img id="pdf-sig-member" class="pdf-sig-preview">
+                        <p style="font-weight: bold; border-top: 1px solid #000; display: inline-block; padding-top: 5px;">সদস্যের স্বাক্ষর</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signature Board -->
+        <div class="modal-content" id="signature-board" style="display: none;">
+            <div class="sec-title"><i class="fa-solid fa-pen-nib"></i> ডিজিটাল স্বাক্ষর বোর্ড</div>
+            <div class="info-grid">
+                <div class="sig-box">
+                    <span class="sig-label">ম্যানেজারের স্বাক্ষর</span>
+                    <canvas id="manager-canvas"></canvas>
+                    <button onclick="clearCanvas('manager-canvas')" style="color:red; border:none; background:none; font-size:11px; cursor:pointer;">মুছে ফেলুন</button>
+                </div>
+                <div class="sig-box">
+                    <span class="sig-label">সদস্যের স্বাক্ষর</span>
+                    <canvas id="member-canvas"></canvas>
+                    <button onclick="clearCanvas('member-canvas')" style="color:red; border:none; background:none; font-size:11px; cursor:pointer;">মুছে ফেলুন</button>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-action btn-download" onclick="downloadLoanPDF()"><i class="fa-solid fa-file-pdf"></i> ফরম ডাউনলোড</button>
+                <button class="btn-action btn-approve" style="flex:2;" onclick="finalApproveAction()">চূড়ান্ত অনুমোদন দিন</button>
+            </div>
+        </div>
+
+        <div class="modal-footer" id="initial-footer">
+            <button class="btn-action btn-reject" onclick="rejectLoanRequest()">রিজেক্ট</button>
+            <button class="btn-action btn-approve" onclick="openSignatureBoard()">Approve করুন</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let pendingLoans = [];
+        let activeLoanId = null;
+
+        // ১. লিস্ট লোড
+        function loadLoanRequests() {
+            db.collection('loan_applications').where('status', '==', 'pending').onSnapshot(snap => {
+                const listDiv = document.getElementById('loan-list-div');
+                if (snap.empty) { listDiv.innerHTML = '<p style="text-align:center; padding:50px; color:#999;">কোনো পেন্ডিং আবেদন নেই</p>'; return; }
+                let html = ''; pendingLoans = [];
+                snap.forEach(doc => {
+                    const d = doc.data(); d.docId = doc.id; pendingLoans.push(d);
+                    html += `
+                        <div class="req-card">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="list-img-${doc.id}" class="req-img">
+                                <div>
+                                    <h4 style="font-size:15px;">${d.memberName}</h4>
+                                    <p style="font-size:11px; color:#666;">ID: ${d.memberId}</p>
+                                    <p style="color:var(--red); font-weight:bold; font-size:14px;">৳ ${d.loanAmount}</p>
+                                </div>
+                            </div>
+                            <button class="btn-action" style="background:var(--dark); flex:none; padding:8px 12px; font-size:11px;" onclick="showLoanDetails('${doc.id}')">বিস্তারিত</button>
+                        </div>`;
+                    fetchImg(d.uid, `list-img-${doc.id}`);
+                });
+                listDiv.innerHTML = html;
+            });
+        }
+
+        async function fetchImg(uid, elId) {
+            const u = await db.collection('users').doc(uid).get();
+            if(u.exists && u.data().photoUrl) document.getElementById(elId).src = u.data().photoUrl;
+        }
+
+        // ২. বিস্তারিত পপআপ
+        async function showLoanDetails(id) {
+            activeLoanId = id;
+            const l = pendingLoans.find(loan => loan.docId === id);
+            const uDoc = await db.collection('users').doc(l.uid).get();
+            const u = uDoc.data();
+
+            // কিস্তি ব্রেকডাউন হিসাব
+            const installments = (l.repaymentRule === "মাসিক") ? l.durationMonths : (l.repaymentRule === "সাপ্তাহিক" ? l.durationMonths * 4 : (l.repaymentRule === "দৈনিক" ? l.durationMonths * 30 : 1));
+            const totalRepayable = Number(l.totalPayable.replace(/[^\d.-]/g, ''));
+            const principalPer = (l.loanAmount / installments).toFixed(2);
+            const interestPer = ((totalRepayable - l.loanAmount) / installments).toFixed(2);
+
+            // পেমেন্ট মাধ্যম ডিটেইলস
+            let disburseInfo = l.method;
+            if(l.method === 'একাউন্ট') {
+                disburseInfo = `ব্যাংক: ${l.bankName}, শাখা: ${l.bankBranch}, নাম: ${l.bankAccTitle}, নং: ${l.bankAccNo}`;
+            } else if(l.mobileAccount) {
+                disburseInfo = `${l.method}: ${l.mobileAccount}`;
+            }
+
+            const html = `
+                <div style="text-align:center; margin-bottom:25px;">
+                    <h1 style="color:var(--gold-dark); font-size: 24px;">সোনালী ফাউন্ডেশন লিমিটেড</h1>
+                    <p style="font-size:12px; color:#555;">অফিসিয়াল লোন মঞ্জুরিকরণ ও চুক্তিনামা ফরম</p>
+                </div>
+
+                <div class="detail-section">
+                    <div class="sec-title"><i class="fa-solid fa-calculator"></i> লোনের হিসাব ও কিস্তি ব্রেক-ডাউন</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">লোনের পরিমাণ:</span><span class="val">৳ ${l.loanAmount}</span></div>
+                        <div class="info-item"><span class="label">লভ্যাংশ হার:</span><span class="val">${l.interestRate}%</span></div>
+                        <div class="info-item"><span class="label">মোট পরিশোধযোগ্য:</span><span class="val" style="color:var(--red); font-size:16px;">${l.totalPayable}</span></div>
+                        <div class="info-item"><span class="label">কিস্তির আসল:</span><span class="val">৳ ${principalPer}</span></div>
+                        <div class="info-item"><span class="label">কিস্তির লাভ:</span><span class="val">৳ ${interestPer}</span></div>
+                        <div class="info-item"><span class="label">কিস্তির সঞ্চয়:</span><span class="val">৳ ${l.savingsPerInst}</span></div>
+                        <div class="info-item" style="background:#eee; padding:5px;"><span class="label">মোট কিস্তির পরিমাণ:</span><span class="val" style="color:var(--green); font-size:15px;">${l.installmentAmount}</span></div>
+                        <div class="info-item"><span class="label">মেয়াদ ও নিয়ম:</span><span class="val">${l.durationMonths} মাস (${l.repaymentRule})</span></div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="sec-title"><i class="fa-solid fa-money-bill-transfer"></i> লোন প্রদানের মাধ্যম</div>
+                    <div class="info-grid">
+                        <div class="info-item" style="grid-column: span 2;"><span class="label">মাধ্যম ও বিবরণ:</span><span class="val">${disburseInfo}</span></div>
+                        <div class="info-item" style="grid-column: span 2;"><span class="label">আবেদনের উদ্দেশ্য:</span><span class="val">${l.purpose}</span></div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="sec-title"><i class="fa-solid fa-user"></i> সদস্যের বিস্তারিত তথ্য ও ঠিকানা</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">সদস্যের নাম:</span><span class="val">${u.fullName}</span></div>
+                        <div class="info-item"><span class="label">সদস্য আইডি:</span><span class="val">${u.memberId}</span></div>
+                        <div class="info-item"><span class="label">পিতার নাম:</span><span class="val">${u.fatherName || '-'}</span></div>
+                        <div class="info-item"><span class="label">মাতার নাম:</span><span class="val">${u.motherName || '-'}</span></div>
+                        <div class="info-item"><span class="label">মোবাইল নম্বর:</span><span class="val">${u.phone}</span></div>
+                        <div class="info-item"><span class="label">পেশা:</span><span class="val">${u.occupation || '-'}</span></div>
+                        <div class="info-item"><span class="label">গ্রাম:</span><span class="val">${u.village || '-'}</span></div>
+                        <div class="info-item"><span class="label">ইউনিয়ন:</span><span class="val">${u.union || '-'}</span></div>
+                        <div class="info-item"><span class="label">থানা:</span><span class="val">${u.thana || '-'}</span></div>
+                        <div class="info-item"><span class="label">জেলা:</span><span class="val">${u.district || '-'}</span></div>
+                        <div class="info-item" style="grid-column: span 2;"><span class="label">বর্তমান ঠিকানা:</span><span class="val">${u.address || '-'}</span></div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="sec-title"><i class="fa-solid fa-users"></i> নমিনির বিস্তারিত তথ্য ও ঠিকানা</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">নমিনির নাম:</span><span class="val">${u.nomineeName || '-'}</span></div>
+                        <div class="info-item"><span class="label">পিতা/স্বামী:</span><span class="val">${u.nomineeFatherName || '-'}</span></div>
+                        <div class="info-item"><span class="label">সম্পর্ক:</span><span class="val">${u.nomineeRelation || '-'}</span></div>
+                        <div class="info-item"><span class="label">মোবাইল নম্বর:</span><span class="val">${u.nomineePhone || '-'}</span></div>
+                        <div class="info-item"><span class="label">গ্রাম:</span><span class="val">${u.nomineeVillage || '-'}</span></div>
+                        <div class="info-item"><span class="label">ইউনিয়ন:</span><span class="val">${u.nomineeUnion || '-'}</span></div>
+                        <div class="info-item"><span class="label">থানা:</span><span class="val">${u.nomineeThana || '-'}</span></div>
+                    </div>
+                </div>
+
+                <div class="detail-section no-pdf">
+                    <div class="sec-title"><i class="fa-solid fa-file-image"></i> আপলোডকৃত ডকুমেন্টস</div>
+                    <div class="doc-gallery">
+                        <div class="doc-box"><img src="${u.photoUrl}" class="doc-img" onclick="window.open(this.src)"><p class="doc-label">সদস্যের ছবি</p></div>
+                        <div class="doc-box"><img src="${u.nidFrontUrl}" class="doc-img" onclick="window.open(this.src)"><p class="doc-label">NID সামনে</p></div>
+                        <div class="doc-box"><img src="${u.nidBackUrl}" class="doc-img" onclick="window.open(this.src)"><p class="doc-label">NID পিছনে</p></div>
+                        <div class="doc-box"><img src="${u.nomineePhotoUrl}" class="doc-img" onclick="window.open(this.src)"><p class="doc-label">নমিনির ছবি</p></div>
+                        <div class="doc-box"><img src="${u.signUrl}" class="doc-img" onclick="window.open(this.src)"><p class="doc-label">সদস্যের স্বাক্ষর</p></div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('modal-data-body').innerHTML = html;
+            document.getElementById('detailModal').style.display = 'block';
+            document.getElementById('signature-board').style.display = 'none';
+            document.getElementById('pdf-signature-view').style.display = 'none';
+            document.getElementById('initial-footer').style.display = 'flex';
+        }
+
+        // ৩. সিগনেচার হ্যান্ডলিং
+        function openSignatureBoard() {
+            document.getElementById('signature-board').style.display = 'block';
+            document.getElementById('initial-footer').style.display = 'none';
+            initCanvas("manager-canvas");
+            initCanvas("member-canvas");
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+
+        function initCanvas(id) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext("2d");
+            let drawing = false;
+            const start = (e) => { drawing = true; draw(e); };
+            const end = () => { drawing = false; ctx.beginPath(); };
+            const draw = (e) => {
+                if (!drawing) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX || e.touches[0].clientX) - rect.left;
+                const y = (e.clientY || e.touches[0].clientY) - rect.top;
+                ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.strokeStyle = "#000";
+                ctx.lineTo(x, y); ctx.stroke(); ctx.moveTo(x, y);
+            };
+            canvas.addEventListener("mousedown", start); canvas.addEventListener("mouseup", end); canvas.addEventListener("mousemove", draw);
+            canvas.addEventListener("touchstart", (e) => { e.preventDefault(); start(e); }); canvas.addEventListener("touchend", end); canvas.addEventListener("touchmove", draw);
+        }
+        function clearCanvas(id) { const c = document.getElementById(id); c.getContext("2d").clearRect(0,0,c.width,c.height); }
+
+        // ৪. লোন অ্যাপ্রুভ লজিক
+        async function finalApproveAction() {
+            const l = pendingLoans.find(loan => loan.docId === activeLoanId);
+            if(!confirm("আপনি কি চূড়ান্তভাবে এই লোনটি অনুমোদন করতে চান?")) return;
+
+            const userRef = db.collection('users').doc(l.uid);
+            const fundRef = db.collection('settings').doc('fund');
+            const loanReqRef = db.collection('loan_applications').doc(activeLoanId);
+
+            try {
+                await db.runTransaction(async (t) => {
+                    const uSnap = await t.get(userRef);
+                    const fSnap = await t.get(fundRef);
+                    const curFund = fSnap.exists ? fSnap.data().totalAmount : 0;
+                    const totalToPay = Number(l.totalPayable.replace(/[^\d.-]/g, ''));
+
+                    if(curFund < l.loanAmount) throw "মাদার ফান্ডে পর্যাপ্ত টাকা নেই!";
+
+                    // আপডেটগুলো
+                    t.set(fundRef, { totalAmount: curFund - l.loanAmount }, { merge: true });
+                    t.update(userRef, { loanDue: (uSnap.data().loanDue || 0) + totalToPay });
+                    t.update(loanReqRef, { status: 'approved', approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    
+                    const ts = firebase.firestore.FieldValue.serverTimestamp();
+                    const d = new Date().toLocaleDateString('bn-BD');
+                    
+                    // মাদার স্টেটমেন্ট
+                    t.set(db.collection('fund_transactions').doc(), { amount: l.loanAmount, type: 'withdraw', source: `লোন ইস্যু: ${l.memberId}`, date: d, timestamp: ts });
+                    // লোন স্টেটমেন্ট
+                    t.set(db.collection('loan_transactions').doc(), { uid: l.uid, memberId: l.memberId, type: 'disbursement', amount: l.loanAmount, totalWithInterest: totalToPay, date: d, timestamp: ts });
+                });
+                alert("লোন সফলভাবে অনুমোদিত হয়েছে এবং ফান্ড আপডেট হয়েছে।");
+                closeModal();
+            } catch (e) { alert("ত্রুটি: " + e); }
+        }
+
+        // ৫. পিডিএফ ডাউনলোড
+        function downloadLoanPDF() {
+            // ক্যানভাস থেকে সিগনেচার ইমেজ নেওয়া
+            document.getElementById('pdf-sig-manager').src = document.getElementById('manager-canvas').toDataURL();
+            document.getElementById('pdf-sig-member').src = document.getElementById('member-canvas').toDataURL();
+            
+            document.getElementById('pdf-signature-view').style.display = 'block';
+            const docs = document.querySelectorAll('.no-pdf');
+            docs.forEach(d => d.style.display = 'none');
+
+            const element = document.getElementById('report-paper');
+            const opt = {
+                margin: 10,
+                filename: `Loan_Form_${activeLoanId}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                document.getElementById('pdf-signature-view').style.display = 'none';
+                docs.forEach(d => d.style.display = 'block');
+            });
+        }
+
+        function rejectLoanRequest() {
+            if(confirm("আবেদনটি বাতিল করবেন?")) {
+                db.collection('loan_applications').doc(activeLoanId).update({ status: 'rejected' }).then(() => { alert("বাতিল হয়েছে"); closeModal(); });
+            }
+        }
+
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+        loadLoanRequests();
+    </script>
+</body>
+</html>

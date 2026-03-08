@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্য স্টেটমেন্ট - অ্যাডমিন প্যানেল</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --gold-dark: #b8860b; --dark: #1a252f; --bg: #f4f7f6; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #000; padding-bottom: 50px; }
+
+        .page-header { background: white; padding: 15px 20px; display: flex; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; margin-right: 15px; cursor: pointer; }
+
+        /* Search Section */
+        .search-container { max-width: 800px; margin: 20px auto; padding: 25px; background: white; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--gold); }
+        .search-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 15px; align-items: flex-end; }
+        .input-group label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; }
+        .btn-search { background: var(--dark); color: white; border: none; padding: 11px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-search:hover { background: #000; }
+
+        /* ================= Report Layout ================= */
+        #report-wrapper { display: none; background: white; min-height: 100vh; padding: 10px; margin-top: 20px; }
+        .report-container { max-width: 1000px; margin: auto; padding: 30px; border: 1px solid #eee; background: #fff; }
+
+        /* Top Header: Foundation & Member Info */
+        .report-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--gold); padding-bottom: 20px; margin-bottom: 20px; }
+        .f-side { display: flex; align-items: center; gap: 15px; }
+        .f-logo { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; }
+        .f-name h2 { font-size: 22px; color: var(--gold-dark); font-weight: 800; }
+        
+        .m-side { display: flex; align-items: center; gap: 15px; text-align: right; }
+        .m-photo { width: 65px; height: 65px; border-radius: 8px; border: 1px solid #ddd; object-fit: cover; }
+        .m-name { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* Banking Table */
+        .ledger-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .ledger-table th, .ledger-table td { border: 1px solid #ddd; padding: 12px 8px; font-size: 13px; text-align: center; }
+        .ledger-table th { background: #f8f9fa; color: #333; font-weight: bold; }
+        .text-right { text-align: right !important; }
+        .text-left { text-align: left !important; }
+        .opening-row { background: #fffdf5; font-weight: bold; }
+        .amt-credit { color: #27ae60; font-weight: bold; }
+        .amt-debit { color: #e74c3c; font-weight: bold; }
+
+        .summary-row { display: flex; justify-content: flex-end; gap: 30px; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; }
+        .sum-item p { font-size: 12px; color: #666; }
+        .sum-item h3 { font-size: 18px; color: var(--dark); font-weight: 800; }
+
+        .btn-download { background: var(--gold); color: white; padding: 12px 25px; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; display: block; margin: 20px auto; }
+
+        @media (max-width: 600px) {
+            .search-grid { grid-template-columns: 1fr; }
+            .report-header { flex-direction: column; text-align: center; gap: 20px; }
+            .m-side { flex-direction: column-reverse; text-align: center; }
+            .ledger-table th, .ledger-table td { font-size: 11px; padding: 8px 4px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">সদস্য স্টেটমেন্ট (ব্যাংকিং লেজার)</div>
+    </div>
+
+    <!-- Search Section -->
+    <div class="search-container" id="search-area">
+        <h3 style="text-align: center; margin-bottom: 20px; color: var(--gold-dark);">সদস্য তথ্য অনুসন্ধান</h3>
+        <div class="search-grid">
+            <div class="input-group">
+                <label>সদস্য আইডি (SF-001)</label>
+                <input type="text" id="memberIdInput" class="form-control" placeholder="ID লিখুন">
+            </div>
+            <div class="input-group">
+                <label>শুরুর তারিখ</label>
+                <input type="date" id="startDate" class="form-control">
+            </div>
+            <div class="input-group">
+                <label>শেষ তারিখ</label>
+                <input type="date" id="endDate" class="form-control">
+            </div>
+        </div>
+        <button class="btn-search" style="width: 100%; margin-top: 15px;" onclick="generateMemberStatement()">স্টেটমেন্ট জেনারেট করুন</button>
+    </div>
+
+    <div id="loader" style="display:none; text-align:center; padding:30px;">
+        <i class="fa-solid fa-circle-notch fa-spin fa-2x" style="color:var(--gold);"></i>
+        <p style="margin-top:10px;">ডাটা প্রসেস হচ্ছে...</p>
+    </div>
+
+    <!-- ================= Report Section ================= -->
+    <div id="report-wrapper">
+        <div class="report-container" id="printArea">
+            <!-- Header -->
+            <div class="report-header">
+                <div class="f-side">
+                    <img src="" id="fLogo" class="f-logo">
+                    <div class="f-name">
+                        <h2 id="fName">সোনালী ফাউন্ডেশন</h2>
+                        <p id="fAddress">Bahubal, Habiganj, Bangladesh</p>
+                    </div>
+                </div>
+                <div class="m-side">
+                    <div>
+                        <h4 class="m-name" id="mNameDisplay">সদস্যের নাম</h4>
+                        <p id="mIdDisplay" style="color:var(--gold-dark); font-weight:bold;">ID: SF-000</p>
+                        <p id="mPhoneDisplay">01700-000000</p>
+                    </div>
+                    <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="mPhoto" class="m-photo">
+                </div>
+            </div>
+
+            <p style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #555;">রিপোর্ট সময়কাল: <span id="dateRangeText">---</span></p>
+
+            <!-- Table -->
+            <table class="ledger-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">SL#</th>
+                        <th style="width: 15%;">তারিখ</th>
+                        <th style="width: 35%;">লেনদেনের বিবরণ</th>
+                        <th style="width: 15%;">ডেবিট (-)</th>
+                        <th style="width: 15%;">ক্রেডিট (+)</th>
+                        <th style="width: 15%;">ব্যালেন্স</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody">
+                    <!-- Data will be injected here -->
+                </tbody>
+            </table>
+
+            <!-- Summary -->
+            <div class="summary-row">
+                <div class="sum-item"><p>মোট জমা</p><h3 id="totalCredit" style="color: green;">৳ ০.০০</h3></div>
+                <div class="sum-item"><p>মোট উত্তোলন</p><h3 id="totalDebit" style="color: red;">৳ ০.০০</h3></div>
+                <div class="sum-item"><p>নিট স্থিতি</p><h3 id="finalBalance">৳ ০.০০</h3></div>
+            </div>
+
+            <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px;">
+                এটি একটি সিস্টেম জেনারেটেড অফিসিয়াল স্টেটমেন্ট। প্রিন্ট সময়: <span id="printTime"></span>
+            </div>
+        </div>
+
+        <button class="btn-download" onclick="downloadPDF()"><i class="fa-solid fa-file-pdf"></i> ডাউনলোড করুন (PDF)</button>
+        <button class="btn-download" style="background:#777;" onclick="location.reload()">আবার সার্চ করুন</button>
+    </div>
+
+    <script>
+        // ১. কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // প্রতিষ্ঠানের তথ্য লোড
+        db.collection('settings').doc('appInfo').get().then(doc => {
+            if(doc.exists) {
+                document.getElementById('fName').innerText = doc.data().orgName;
+                document.getElementById('fLogo').src = doc.data().logoUrl;
+                document.getElementById('fAddress').innerText = doc.data().address || "Bahubal, Habiganj, Bangladesh";
+            }
+        });
+
+        // ২. স্টেটমেন্ট জেনারেশন লজিক
+        async function generateMemberStatement() {
+            const memberId = document.getElementById('memberIdInput').value.trim().toUpperCase();
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+
+            if(!memberId || !start || !end) return alert("সবগুলো তথ্য সঠিকভাবে পূরণ করুন!");
+
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('search-area').style.display = 'none';
+
+            try {
+                // সদস্যের তথ্য খুঁজে বের করা
+                const userSnap = await db.collection('users').where('memberId', '==', memberId).get();
+                if(userSnap.empty) {
+                    throw new Error("এই আইডির কোনো সদস্য পাওয়া যায়নি!");
+                }
+                const userDoc = userSnap.docs[0];
+                const userData = userDoc.data();
+                const uid = userDoc.id;
+
+                // সদস্যের প্রোফাইল তথ্য বসানো
+                document.getElementById('mNameDisplay').innerText = userData.fullName;
+                document.getElementById('mIdDisplay').innerText = "ID: " + userData.memberId;
+                document.getElementById('mPhoneDisplay').innerText = userData.phone;
+                if(userData.photoUrl) document.getElementById('mPhoto').src = userData.photoUrl;
+
+                // সদস্যের সব ট্রানজেকশন আনা
+                const txSnap = await db.collection('transactions').where('uid', '==', uid).get();
+                
+                let allTx = [];
+                txSnap.forEach(doc => {
+                    let d = doc.data();
+                    allTx.push({
+                        ts: d.timestamp ? d.timestamp.seconds * 1000 : new Date(d.date).getTime(),
+                        date: d.date,
+                        type: d.type === 'deposit' ? 'CREDIT' : 'DEBIT',
+                        amount: Number(d.amount),
+                        desc: d.method ? `সেভিংস লেনদেন (${d.method})` : 'সরাসরি লেনদেন'
+                    });
+                });
+
+                // সময় অনুযায়ী সাজানো
+                allTx.sort((a, b) => a.ts - b.ts);
+
+                const filterS = new Date(start).setHours(0,0,0,0);
+                const filterE = new Date(end).setHours(23,59,59,999);
+
+                // ৩. ওপেনিং ব্যালেন্স হিসাব
+                let openingBalance = 0;
+                allTx.filter(x => x.ts < filterS).forEach(x => {
+                    if(x.type === 'CREDIT') openingBalance += x.amount; 
+                    else openingBalance -= x.amount;
+                });
+
+                // ৪. টেবিল জেনারেট
+                let currentBalance = openingBalance;
+                let totalC = 0, totalD = 0, sl = 1, match = false;
+                let rowsHtml = `<tr class="opening-row"><td colspan="5" class="text-right">Opening Balance :</td><td class="text-right">৳ ${openingBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>`;
+
+                allTx.forEach(tx => {
+                    if(tx.type === 'CREDIT') currentBalance += tx.amount; else currentBalance -= tx.amount;
+
+                    if(tx.ts >= filterS && tx.ts <= filterE) {
+                        match = true;
+                        if(tx.type === 'CREDIT') totalC += tx.amount; else totalD += tx.amount;
+
+                        rowsHtml += `
+                            <tr>
+                                <td>${sl++}</td>
+                                <td>${tx.date}</td>
+                                <td class="text-left">${tx.desc}</td>
+                                <td class="amt-debit text-right">${tx.type==='DEBIT' ? '৳ '+tx.amount.toLocaleString('en-IN', {minimumFractionDigits: 2}) : '0.00'}</td>
+                                <td class="amt-credit text-right">${tx.type==='CREDIT' ? '৳ '+tx.amount.toLocaleString('en-IN', {minimumFractionDigits: 2}) : '0.00'}</td>
+                                <td class="text-right" style="font-weight:bold;">৳ ${currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            </tr>`;
+                    }
+                });
+
+                document.getElementById('ledgerBody').innerHTML = rowsHtml;
+                document.getElementById('totalCredit').innerText = "৳ " + totalC.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                document.getElementById('totalDebit').innerText = "৳ " + totalD.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                document.getElementById('finalBalance').innerText = "৳ " + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                document.getElementById('dateRangeText').innerText = `${start} হতে ${end} পর্যন্ত`;
+                document.getElementById('printTime').innerText = new Date().toLocaleString('bn-BD');
+
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('report-wrapper').style.display = 'block';
+
+            } catch (err) {
+                alert(err.message);
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('search-area').style.display = 'block';
+            }
+        }
+
+        function downloadPDF() {
+            const el = document.getElementById('printArea');
+            const name = document.getElementById('mNameDisplay').innerText;
+            html2pdf().set({
+                margin: 10,
+                filename: `Statement_${name}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(el).save();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>পেমেন্ট নাম্বার আপডেট - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --white: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); display: flex; justify-content: center; padding: 15px; }
+
+        .admin-container {
+            width: 100%; max-width: 500px; background-color: var(--white); 
+            border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden;
+            min-height: 80vh; padding-bottom: 20px;
+        }
+
+        /* Header */
+        .page-header {
+            background: var(--dark); padding: 25px; text-align: center; color: white; position: relative;
+            border-bottom: 5px solid var(--gold);
+        }
+        .back-btn { position: absolute; left: 20px; top: 25px; color: white; font-size: 20px; text-decoration: none; cursor: pointer; }
+
+        /* Form Area */
+        .content-area { padding: 20px; }
+        .card-title { font-size: 18px; font-weight: bold; color: var(--dark); margin-bottom: 20px; text-align: center; }
+
+        .section-label { 
+            font-size: 15px; font-weight: bold; color: var(--gold-dark); 
+            border-left: 4px solid var(--gold); padding-left: 10px; margin: 25px 0 15px 0;
+        }
+
+        .form-group { margin-bottom: 15px; position: relative; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; }
+        
+        .input-with-icon { position: relative; }
+        .input-with-icon i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gold-dark); font-size: 14px; }
+        
+        .form-control {
+            width: 100%; padding: 11px 15px 11px 45px; border: 1.5px solid #ddd; border-radius: 10px;
+            font-size: 14px; outline: none; transition: 0.3s; background: #fafafa;
+        }
+        .form-control:focus { border-color: var(--gold); background: #fff; box-shadow: 0 0 8px rgba(212,175,55,0.2); }
+
+        /* Color Icons */
+        .fa-bkash { color: #d12053 !important; }
+        .fa-nagad { color: #f7941d !important; }
+        .fa-rocket { color: #8c3494 !important; }
+
+        /* Save Button */
+        .btn-save {
+            width: 100%; padding: 15px; background: linear-gradient(135deg, #d4af37, #b8860b);
+            color: white; border: none; border-radius: 10px;
+            font-size: 17px; font-weight: bold; cursor: pointer; transition: 0.3s;
+            margin-top: 20px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+        .btn-save:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4); }
+        .btn-save:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .loader { text-align: center; padding: 20px; display: none; color: var(--gold); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <!-- Header -->
+        <header class="page-header">
+            <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+            <h2>পেমেন্ট সেটিংস</h2>
+        </header>
+
+        <div class="content-area">
+            <div id="loader" class="loader">
+                <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i>
+                <p style="margin-top: 10px;">লোড হচ্ছে...</p>
+            </div>
+
+            <form id="paymentForm" onsubmit="savePaymentNumbers(event)">
+                
+                <div class="section-label">মোবাইল ব্যাংকিং নাম্বার</div>
+                
+                <!-- bKash -->
+                <div class="form-group">
+                    <label>বিকাশ নাম্বার (ব্যক্তিগত)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-mobile-screen fa-bkash"></i>
+                        <input type="text" id="bkash-num" class="form-control" placeholder="যেমন: ০১৭০০-০০০০০০">
+                    </div>
+                </div>
+
+                <!-- Nagad -->
+                <div class="form-group">
+                    <label>নগদ নাম্বার (ব্যক্তিগত)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-mobile-screen fa-nagad"></i>
+                        <input type="text" id="nagad-num" class="form-control" placeholder="যেমন: ০১৭০০-০০০০০০">
+                    </div>
+                </div>
+
+                <!-- Rocket -->
+                <div class="form-group">
+                    <label>রকেট নাম্বার (ব্যক্তিগত)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-mobile-screen fa-rocket"></i>
+                        <input type="text" id="rocket-num" class="form-control" placeholder="যেমন: ০১৭০০-০০০০০০">
+                    </div>
+                </div>
+
+                <div class="section-label">ব্যাংক একাউন্ট ডিটেইলস</div>
+
+                <!-- Bank Name -->
+                <div class="form-group">
+                    <label>ব্যাংকের নাম</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-building-columns"></i>
+                        <input type="text" id="bank-name" class="form-control" placeholder="যেমন: সোনালী ব্যাংক">
+                    </div>
+                </div>
+
+                <!-- Branch Name -->
+                <div class="form-group">
+                    <label>শাখার নাম</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-code-branch"></i>
+                        <input type="text" id="bank-branch" class="form-control" placeholder="শাখার নাম লিখুন">
+                    </div>
+                </div>
+
+                <!-- Account Number -->
+                <div class="form-group">
+                    <label>একাউন্ট নম্বর</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-hashtag"></i>
+                        <input type="text" id="bank-acc-no" class="form-control" placeholder="হিসাব নম্বর">
+                    </div>
+                </div>
+
+                <!-- Account Title -->
+                <div class="form-group">
+                    <label>একাউন্ট নাম (Account Name)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-signature"></i>
+                        <input type="text" id="bank-acc-name" class="form-control" placeholder="হিসাবধারীর নাম">
+                    </div>
+                </div>
+
+                <button type="submit" id="save-btn" class="btn-save">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> সেটিংস আপডেট করুন
+                </button>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ১. ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ২. বর্তমান তথ্য লোড করা
+        async function fetchPaymentInfo() {
+            const loader = document.getElementById('loader');
+            const form = document.getElementById('paymentForm');
+            loader.style.display = 'block';
+            form.style.opacity = '0.3';
+
+            try {
+                const doc = await db.collection('settings').doc('paymentInfo').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    // মোবাইল নাম্বারগুলো
+                    document.getElementById('bkash-num').value = data.bkash || "";
+                    document.getElementById('nagad-num').value = data.nagad || "";
+                    document.getElementById('rocket-num').value = data.rocket || "";
+                    
+                    // ব্যাংক একাউন্টের নতুন ফিল্ডগুলো
+                    document.getElementById('bank-name').value = data.bankName || "";
+                    document.getElementById('bank-branch').value = data.bankBranch || "";
+                    document.getElementById('bank-acc-no').value = data.bankAccNo || "";
+                    document.getElementById('bank-acc-name').value = data.bankAccName || "";
+                }
+            } catch (error) {
+                console.error("Error fetching info:", error);
+            } finally {
+                loader.style.display = 'none';
+                form.style.opacity = '1';
+            }
+        }
+
+        // ৩. তথ্য আপডেট/সেভ করা
+        async function savePaymentNumbers(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-btn');
+            
+            const bkash = document.getElementById('bkash-num').value.trim();
+            const nagad = document.getElementById('nagad-num').value.trim();
+            const rocket = document.getElementById('rocket-num').value.trim();
+            
+            const bName = document.getElementById('bank-name').value.trim();
+            const bBranch = document.getElementById('bank-branch').value.trim();
+            const bAccNo = document.getElementById('bank-acc-no').value.trim();
+            const bAccName = document.getElementById('bank-acc-name').value.trim();
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> প্রসেসিং...';
+
+            try {
+                // ডাটাবেজে আপডেট
+                await db.collection('settings').doc('paymentInfo').set({
+                    bkash: bkash,
+                    nagad: nagad,
+                    rocket: rocket,
+                    bankName: bName,
+                    bankBranch: bBranch,
+                    bankAccNo: bAccNo,
+                    bankAccName: bAccName,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                alert("সেটিংস সফলভাবে আপডেট হয়েছে!");
+            } catch (error) {
+                alert("ত্রুটি: " + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> সেটিংস আপডেট করুন';
+            }
+        }
+
+        fetchPaymentInfo();
+    </script>
+</body>
+</html>

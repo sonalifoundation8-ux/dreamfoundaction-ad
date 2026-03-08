@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন ক্লোজ - অ্যাডমিন প্যানেল</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Image Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --gold-dark: #b8860b; --dark: #1a252f; --bg: #f4f7f6; --red: #e74c3c; --green: #27ae60; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        .page-header { background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+        .card { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--gold); }
+        
+        .search-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 14px; background: #fafafa; }
+        .btn-main { padding: 12px 20px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; background: var(--dark); transition: 0.3s; }
+
+        #member-card { display: none; text-align: center; animation: fadeIn 0.5s; }
+        .m-img { width: 90px; height: 90px; border-radius: 50%; border: 3px solid var(--gold); object-fit: cover; margin-bottom: 15px; }
+        .m-name { font-size: 19px; font-weight: bold; color: var(--dark); }
+        
+        .status-box { background: #fffdf5; padding: 15px; border-radius: 12px; border: 1px solid var(--gold); margin: 15px 0; }
+        .due-text { font-size: 22px; font-weight: 800; margin-top: 5px; }
+
+        .btn-close-loan { width: 100%; padding: 15px; background: var(--red); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-close-loan:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* OTP Modal */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; width: 90%; max-width: 400px; border-radius: 20px; text-align: center; }
+        .otp-input { letter-spacing: 10px; font-size: 24px; text-align: center; font-weight: bold; margin: 20px 0; border: 2px solid var(--gold) !important; color: var(--gold-dark); outline: none; }
+
+        /* Closure Agreement Form */
+        #report-section { display: none; padding: 10px; }
+        .agreement-paper { background: white; border: 2px solid #333; padding: 40px; border-radius: 5px; position: relative; line-height: 1.8; }
+        .watermark { position: absolute; top: 35%; left: 10%; font-size: 45px; color: rgba(231, 76, 60, 0.05); transform: rotate(-30deg); font-weight: bold; pointer-events: none; }
+
+        @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div style="font-weight:bold;">লোন ক্লোজ ও ডাটা ডিলিট</div>
+    </div>
+
+    <div class="container" id="main-ui">
+        <div class="card">
+            <h3 style="text-align: center; margin-bottom: 20px; color: var(--gold-dark);">সদস্য অনুসন্ধান</h3>
+            <div class="search-group">
+                <input type="text" id="searchIdInput" class="form-control" placeholder="সদস্য ID (যেমন: SF-002)">
+                <button class="btn-main" onclick="searchLoanMember()"><i class="fa-solid fa-magnifying-glass"></i></button>
+            </div>
+
+            <!-- Member Details Card -->
+            <div id="member-card">
+                <img src="" id="m-img" class="m-img">
+                <h4 id="m-name">---</h4>
+                <p id="m-id" style="color:var(--gold-dark); font-weight:bold;">---</p>
+                <p id="m-phone" style="font-size: 13px; color: #666;">---</p>
+                
+                <div class="status-box">
+                    <p style="font-size: 12px; color: #777;">বর্তমান লোন বকেয়া</p>
+                    <h3 id="m-loan-due" class="due-text">৳ ০.০০</h3>
+                </div>
+
+                <button class="btn-close-loan" id="close-btn" onclick="sendClosureOTP()">লোন ক্লোজ প্রসেস শুরু করুন</button>
+                <p id="error-msg" style="color:red; font-size: 11px; margin-top: 10px; display: none;">* লোন বকেয়া ০.০০ না হওয়া পর্যন্ত রেকর্ড মোছা সম্ভব নয়।</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTP Modal -->
+    <div id="otp-modal" class="modal">
+        <div class="modal-content">
+            <i class="fa-solid fa-key" style="font-size: 40px; color: var(--gold); margin-bottom: 15px;"></i>
+            <h3>নিরাপত্তা যাচাই</h3>
+            <p style="font-size: 14px; color: #666; margin-bottom: 15px;">
+                সদস্যের প্যানেলে (নোটিফিকেশন) একটি লোন ক্লোজিং কোড পাঠানো হয়েছে। কোডটি সংগ্রহ করে নিচে বসান।
+            </p>
+            <input type="text" id="otp-input" class="form-control otp-input" maxlength="6" placeholder="000000">
+            <button class="btn-main" style="width: 100%; background: var(--green);" onclick="verifyAndWipeData()">যাচাই ও ডিলিট করুন</button>
+            <p onclick="closeModal()" style="margin-top: 15px; color:red; cursor:pointer; font-size:13px;">বাতিল</p>
+        </div>
+    </div>
+
+    <!-- Final Document View -->
+    <div class="container" id="report-section">
+        <div class="agreement-paper" id="closure-doc">
+            <div class="watermark">LOAN CLOSED</div>
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 25px;">
+                <h2 id="org-name-title" style="text-transform: uppercase;">সোনালী ফাউন্ডেশন</h2>
+                <p style="font-weight: bold; font-size: 14px;">লোন ক্লোজিং ও দায়মুক্তি সনদ</p>
+            </div>
+            
+            <div id="agreement-text" style="font-size: 15px; text-align: justify;">
+                <!-- Filled by JS -->
+            </div>
+
+            <div style="margin-top: 70px; display: flex; justify-content: space-between; text-align: center;">
+                <div style="width: 40%; border-top: 1px solid #000; padding-top: 5px; font-weight: bold;">ম্যানেজারের স্বাক্ষর</div>
+                <div style="width: 40%; border-top: 1px solid #000; padding-top: 5px; font-weight: bold;">সদস্যের স্বাক্ষর</div>
+            </div>
+            <p style="text-align: center; margin-top: 50px; font-size: 11px; color: #777;">তারিখ: <span id="finish-date"></span></p>
+        </div>
+        <button class="btn-main" style="width:100%; margin-top:20px; background: var(--gold);" onclick="downloadAsJPG()"><i class="fa-solid fa-image"></i> সনদ ডাউনলোড করুন (JPG)</button>
+        <button class="btn-main" style="width:100%; margin-top:10px; background: #777;" onclick="location.reload()">ড্যাশবোর্ডে ফিরে যান</button>
+    </div>
+
+    <script>
+        // ১. ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let memberObj = null;
+        let serverOtp = null;
+
+        // ২. সদস্য সার্চ
+        async function searchLoanMember() {
+            const id = document.getElementById('searchIdInput').value.trim().toUpperCase();
+            if(!id) return alert("মেম্বার আইডি লিখুন!");
+            
+            const snap = await db.collection('users').where('memberId', '==', id).get();
+            if(snap.empty) return alert("সদস্য পাওয়া যায়নি!");
+            
+            memberObj = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            const loanDue = Number(memberObj.loanDue || 0);
+
+            document.getElementById('m-img').src = memberObj.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+            document.getElementById('m-name').innerText = memberObj.fullName;
+            document.getElementById('m-id').innerText = "Member ID: " + memberObj.memberId;
+            document.getElementById('m-phone').innerText = "মোবাইল: " + memberObj.phone;
+            document.getElementById('m-loan-due').innerText = "৳ " + loanDue.toFixed(2);
+
+            document.getElementById('member-card').style.display = 'block';
+
+            // বকেয়া থাকলে বাটন লক
+            if(loanDue > 0.01) {
+                document.getElementById('close-btn').disabled = true;
+                document.getElementById('error-msg').style.display = 'block';
+            } else {
+                document.getElementById('close-btn').disabled = false;
+                document.getElementById('error-msg').style.display = 'none';
+            }
+        }
+
+        // ৩. নোটিফিকেশন কোড পাঠানো (সদস্য একাউন্ট ক্লোজিং এর মতো হুবহু ফিক্স করা হয়েছে)
+        async function sendClosureOTP() {
+            if(!confirm("আপনি কি এই সদস্যের লোন ক্লোজিং সিকিউরিটি কোড পাঠাতে চান?")) return;
+
+            const otp = Math.floor(100000 + Math.random() * 900000);
+            serverOtp = otp.toString();
+            const date = new Date().toLocaleDateString('bn-BD');
+
+            try {
+                // সদস্যের প্যানেলে নোটিফিকেশন পাঠানো (টাইপ: otp)
+                await db.collection('notifications').add({
+                    receiverUid: memberObj.id,
+                    message: `তারিখ: ${date}। আপনার লোন ক্লোজ ও রেকর্ড রিসেট করার সিক্রেট কোড: ${otp}। এটি কাউকে দিবেন না।`,
+                    type: 'otp', // এটি মেম্বার প্যানেলের বেল আইকনে পপআপ ট্রিগার করবে
+                    code: otp,
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    isRead: false
+                });
+
+                document.getElementById('otp-modal').style.display = 'flex';
+                alert("সদস্যের প্যানেলে নিরাপত্তা কোড পাঠানো হয়েছে!");
+            } catch (e) { alert("Error: " + e.message); }
+        }
+
+        // ৪. কোড যাচাই ও ডাটা ডিলিট
+        async function verifyAndWipeData() {
+            const input = document.getElementById('otp-input').value;
+            if(input !== serverOtp) return alert("❌ ভুল কোড! সদস্যের প্যানেল থেকে সঠিক কোডটি দিন।");
+
+            if(!confirm("চূড়ান্ত সতর্কতা! এই সদস্যের লোন আবেদন ও যাবতীয় ইতিহাস মুছে যাবে। আপনি কি নিশ্চিত?")) return;
+
+            const uid = memberObj.id;
+            try {
+                generateAgreementText();
+                // সব কালেকশন থেকে ডাটা ডিলিট
+                const collections = ['loan_transactions', 'loan_repayments', 'loan_applications', 'notifications'];
+                for (let col of collections) {
+                    const snap = await db.collection(col).where(col === 'notifications' ? 'receiverUid' : 'uid', '==', uid).get();
+                    const batch = db.batch();
+                    snap.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
+                
+                // সদস্য প্রোফাইল কিন্তু ডিলিট হবে না, শুধু লোন রেকর্ড মুছবে। 
+                // যদি পুরো প্রোফাইল মুছতে চান তবে নিচের লাইনটি আন-কমেন্ট করুন:
+                // await db.collection('users').doc(uid).delete();
+                
+                await db.collection('users').doc(uid).update({ loanDue: 0, loanRepaid: 0 });
+
+                alert("সাফল্য! লোন ক্লোজ করা হয়েছে।");
+                document.getElementById('otp-modal').style.display = 'none';
+                document.getElementById('main-ui').style.display = 'none';
+                document.getElementById('report-section').style.display = 'block';
+            } catch (e) { alert(e.message); }
+        }
+
+        function generateAgreementText() {
+            document.getElementById('finish-date').innerText = new Date().toLocaleDateString('bn-BD');
+            document.getElementById('agreement-text').innerHTML = `আমি <strong>${memberObj.fullName}</strong>, আইডি: <strong>${memberObj.memberId}</strong>, এই মর্মে নিশ্চিত করিতেছি যে, আমার লোনটি অদ্য তারিখে সম্পূর্ণ পরিশোধিত হইয়াছে এবং কর্তৃপক্ষ লোন একাউন্টটি চূড়ান্তভাবে নিষ্পত্তি করিয়াছে।`;
+            db.collection('settings').doc('appInfo').get().then(doc => { if(doc.exists) document.getElementById('org-name-title').innerText = doc.data().orgName; });
+        }
+
+        function downloadAsJPG() {
+            html2canvas(document.getElementById('closure-doc'), { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Loan_Closure_${memberObj.memberId}.jpg`;
+                link.href = canvas.toDataURL("image/jpeg", 1.0);
+                link.click();
+            });
+        }
+        function closeModal() { document.getElementById('otp-modal').style.display = 'none'; }
+    </script>
+</body>
+</html>

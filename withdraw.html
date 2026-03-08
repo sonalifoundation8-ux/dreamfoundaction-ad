@@ -1,0 +1,233 @@
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>টাকা উত্তোলন - নিরাপদ সিস্টেম</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script> 
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        
+        body { font-family: 'Noto Sans Bengali', sans-serif; background: #f4f6f9; display: flex; justify-content: center; padding: 20px; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-top: 40px; }
+        
+        h2 { text-align: center; color: #d4af37; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; outline: none; }
+        .form-control:focus { border-color: #d4af37; }
+        
+        .btn { width: 100%; padding: 12px; background: #d4af37; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn:hover { background: #b58500; }
+        .btn-search { background: #2c3e50; margin-top: 5px; }
+
+        /* মেম্বার ডিটেইলস কার্ড */
+        #member-info { display: none; background: #fffaf0; padding: 15px; border-radius: 8px; border: 1px solid #d4af37; margin-bottom: 20px; text-align: center; }
+        .profile-img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #d4af37; margin-bottom: 10px; }
+        .balance-text { font-size: 18px; color: green; font-weight: bold; margin: 5px 0; }
+
+        /* OTP মডাল */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
+        .modal-content { background: white; margin: 15% auto; padding: 25px; width: 90%; max-width: 400px; border-radius: 10px; text-align: center; position: relative; animation: slideDown 0.3s; }
+        @keyframes slideDown { from {top: -50px; opacity: 0;} to {top: 0; opacity: 1;} }
+        
+        .otp-input { letter-spacing: 5px; font-size: 24px; text-align: center; font-weight: bold; }
+        .close-btn { position: absolute; right: 15px; top: 10px; font-size: 25px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2><i class="fa-solid fa-money-bill-transfer"></i> টাকা উত্তোলন</h2>
+
+    <!-- ১. সার্চ সেকশন -->
+    <div class="form-group">
+        <label>সদস্য আইডি (Member ID)</label>
+        <input type="text" id="search-id" class="form-control" placeholder="যেমন: SF-001">
+        <button class="btn btn-search" onclick="searchMember()">সদস্য খুঁজুন <i class="fa-solid fa-magnifying-glass"></i></button>
+    </div>
+
+    <!-- ২. সদস্যের তথ্য ও এমাউন্ট সেকশন -->
+    <div id="member-info">
+        <img id="m-photo" src="" class="profile-img">
+        <h3 id="m-name">নাম</h3>
+        <p id="m-phone"><i class="fa-solid fa-phone"></i> <span>...</span></p>
+        <div class="balance-text">বর্তমান ব্যালেন্স: ৳ <span id="m-balance">0</span></div>
+        
+        <div class="form-group" style="margin-top: 15px; text-align: left;">
+            <label>উত্তোলনের পরিমাণ</label>
+            <input type="number" id="withdraw-amount" class="form-control" placeholder="৳ 500">
+        </div>
+        
+        <button class="btn" onclick="initiateWithdrawal()">উত্তোলন শুরু করুন <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+</div>
+
+<!-- ৩. OTP ভেরিফিকেশন মডাল -->
+<div id="otp-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <h3 style="color: #2c3e50;">নিরাপত্তা যাচাই</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 15px;">
+            সদস্যের প্যানেলে একটি ৬ সংখ্যার কোড পাঠানো হয়েছে। কোডটি নিয়ে নিচে বসান।
+        </p>
+        
+        <input type="text" id="otp-code" class="form-control otp-input" placeholder="XXXXXX" maxlength="6">
+        
+        <button class="btn" style="margin-top: 15px; background: green;" onclick="verifyAndWithdraw()">যাচাই করুন ও টাকা তুলুন</button>
+        <p style="margin-top: 10px; font-size: 12px; color: red;">সদস্যকে অ্যাপ চেক করতে বলুন।</p>
+    </div>
+</div>
+
+<script>
+    let currentMemberId = null; 
+    let serverOtp = null;       
+    let currentBalance = 0;
+
+    // ১. সদস্য সার্চ করা
+    async function searchMember() {
+        const memId = document.getElementById('search-id').value.trim();
+        if(!memId) return alert("মেম্বার আইডি দিন!");
+
+        const snapshot = await db.collection('users').where('memberId', '==', memId).get();
+        
+        if(snapshot.empty) {
+            alert("সদস্য পাওয়া যায়নি!");
+            document.getElementById('member-info').style.display = 'none';
+        } else {
+            const data = snapshot.docs[0].data();
+            currentMemberId = snapshot.docs[0].id; 
+            currentBalance = Number(data.balance) || 0;
+
+            document.getElementById('m-photo').src = data.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+            document.getElementById('m-name').innerText = data.fullName;
+            document.getElementById('m-phone').innerText = data.phone;
+            document.getElementById('m-balance').innerText = currentBalance;
+            
+            document.getElementById('member-info').style.display = 'block';
+        }
+    }
+
+    // ২. উইথড্রয়াল শুরু (OTP জেনারেট ও পাঠানো)
+    async function initiateWithdrawal() {
+        const amount = Number(document.getElementById('withdraw-amount').value);
+        
+        if(!amount || amount <= 0) return alert("সঠিক টাকার পরিমাণ দিন!");
+        if(amount > currentBalance) return alert("সদস্যের একাউন্টে পর্যাপ্ত ব্যালেন্স নেই!");
+
+        // ৬ সংখ্যার র‍্যান্ডম কোড তৈরি
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        serverOtp = otp.toString(); 
+
+        // সদস্যের প্যানেলে নোটিফিকেশন পাঠানো
+        try {
+            await db.collection('notifications').add({
+                receiverUid: currentMemberId, 
+                message: `টাকা উত্তোলনের জন্য আপনার সিক্রেট কোড: ${otp}. পরিমাণ: ৳${amount}`,
+                type: 'otp',
+                code: otp,
+                date: firebase.firestore.FieldValue.serverTimestamp(),
+                isRead: false
+            });
+
+            document.getElementById('otp-modal').style.display = 'block';
+            alert(`সদস্যের প্যানেলে কোড পাঠানো হয়েছে!`);
+
+        } catch (error) {
+            console.error(error);
+            alert("কোড পাঠাতে সমস্যা হয়েছে। ইন্টারনেট চেক করুন।");
+        }
+    }
+
+    // ৩. কোড যাচাই এবং ট্রানজেকশন সম্পন্ন করা (ফান্ড লজিক সহ)
+    async function verifyAndWithdraw() {
+        const inputCode = document.getElementById('otp-code').value;
+        const amount = Number(document.getElementById('withdraw-amount').value);
+
+        if(inputCode !== serverOtp) {
+            alert("❌ ভুল কোড! সদস্যের দেওয়া সঠিক কোড দিন।");
+            return;
+        }
+
+        try {
+            const userRef = db.collection('users').doc(currentMemberId);
+            const fundRef = db.collection('settings').doc('fund'); // মাদার ফান্ড
+            const txnRef = db.collection('transactions').doc();
+            const fundTxnRef = db.collection('fund_transactions').doc();
+
+            await db.runTransaction(async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                const fundDoc = await transaction.get(fundRef);
+
+                if (!userDoc.exists) throw "User does not exist!";
+                
+                const newBalance = (Number(userDoc.data().balance) || 0) - amount;
+                
+                if (newBalance < 0) throw "অপর্যাপ্ত ব্যালেন্স!";
+                
+                // ফান্ড আপডেট লজিক: (আপনার কথা অনুযায়ী ফান্ডে টাকা জমা হবে)
+                const newFundTotal = (Number(fundDoc.data().totalAmount) || 0) + amount;
+
+                // ১. সদস্যের ব্যালেন্স আপডেট (কমানো)
+                transaction.update(userRef, { balance: newBalance });
+
+                // ২. অ্যাডমিনের মাদার ফান্ড আপডেট (বাড়ানো)
+                transaction.set(fundRef, { totalAmount: newFundTotal }, { merge: true });
+
+                // ৩. সদস্যের স্টেটমেন্ট আপডেট (Withdrawal Record)
+                transaction.set(txnRef, {
+                    uid: currentMemberId,
+                    amount: amount,
+                    type: 'withdraw',
+                    method: 'Office Cash',
+                    status: 'approved',
+                    date: new Date().toLocaleDateString('bn-BD'),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    description: 'অফিস থেকে ক্যাশ উত্তোলন'
+                });
+
+                // ৪. অ্যাডমিনের ফান্ড স্টেটমেন্ট আপডেট (Fund Deposit Record)
+                transaction.set(fundTxnRef, {
+                    amount: amount,
+                    type: 'deposit', // ফান্ডে টাকা ঢুকছে তাই deposit
+                    source: `Withdrawal by Member (${userDoc.data().memberId})`,
+                    date: new Date().toLocaleDateString('bn-BD'),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            alert("✅ টাকা উত্তোলন সফল হয়েছে!");
+            closeModal();
+            
+            // UI রিসেট
+            document.getElementById('member-info').style.display = 'none';
+            document.getElementById('search-id').value = '';
+            document.getElementById('withdraw-amount').value = '';
+            document.getElementById('otp-code').value = '';
+
+            // কনফার্মেশন নোটিফিকেশন
+            await db.collection('notifications').add({
+                receiverUid: currentMemberId,
+                message: `সফলভাবে ${amount} টাকা উত্তোলন করা হয়েছে। বর্তমান ব্যালেন্স: ${currentBalance - amount} টাকা।`,
+                date: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+        } catch (error) {
+            console.error("Transaction failed: ", error);
+            alert("লেনদেন ব্যর্থ হয়েছে: " + error);
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('otp-modal').style.display = 'none';
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লোন সদস্য প্রোফাইল - অ্যাডমিন প্যানেল</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+            --green: #27ae60;
+            --red: #c0392b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #333; padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: #fff; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 1000;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* Search Box */
+        .search-container { padding: 20px; max-width: 800px; margin: auto; }
+        .search-box {
+            display: flex; align-items: center; background: white; padding: 10px 15px;
+            border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 2px solid var(--gold);
+        }
+        .search-box input { flex: 1; border: none; outline: none; padding: 0 10px; font-size: 15px; }
+        .search-box i { color: var(--gold); }
+
+        /* List Area */
+        .list-container { max-width: 800px; margin: auto; padding: 0 15px; }
+        .member-card {
+            background: white; border-radius: 20px; padding: 15px; margin-bottom: 15px;
+            display: flex; align-items: center; gap: 15px; border-left: 6px solid var(--gold);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: 0.3s;
+        }
+        .member-card:hover { transform: translateY(-3px); }
+        .m-img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; }
+        .m-info { flex: 1; }
+        .m-info h4 { font-size: 16px; color: var(--dark); margin-bottom: 3px; font-weight: 700; }
+        
+        .m-stats { display: flex; gap: 15px; margin-top: 5px; }
+        .stat-badge { font-size: 11px; font-weight: bold; padding: 3px 10px; border-radius: 5px; }
+        .bg-paid { background: #e8f5e9; color: var(--green); }
+        .bg-due { background: #ffebee; color: var(--red); }
+
+        .btn-detail { background: var(--dark); color: white; border: none; padding: 10px 15px; border-radius: 10px; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-detail:hover { background: var(--gold); }
+
+        /* ================= Full Page Modal ================= */
+        .full-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; overflow-y: auto; animation: slideUp 0.4s ease; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .modal-nav { padding: 15px 20px; background: var(--dark); color: white; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 2100; }
+        .close-btn { font-size: 24px; cursor: pointer; }
+        .modal-content { padding: 20px; max-width: 900px; margin: auto; }
+        
+        .detail-section { background: #fffdf5; border: 1.5px solid var(--gold); border-radius: 15px; padding: 20px; margin-bottom: 25px; }
+        .sec-title { font-size: 16px; font-weight: bold; color: var(--gold-dark); border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 25px; }
+        .info-item { border-bottom: 1px dashed #ddd; padding: 8px 0; display: flex; justify-content: space-between; font-size: 14px; }
+        .label { color: #777; font-weight: 600; }
+        .val { color: #333; font-weight: bold; text-align: right; }
+
+        /* Banking Loan Analysis Card */
+        .loan-calc-card { background: var(--dark); color: white; border-radius: 15px; padding: 20px; margin-bottom: 25px; }
+        .loan-calc-card .label { color: #aaa; }
+        .loan-calc-card .val { color: var(--gold); font-size: 16px; }
+
+        .doc-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; margin-top: 15px; }
+        .doc-box { text-align: center; border: 1px solid #eee; padding: 5px; border-radius: 10px; background: #fff; }
+        .doc-img { width: 100%; height: 130px; object-fit: cover; border-radius: 8px; cursor: pointer; }
+
+        .loader { text-align: center; padding: 50px; color: var(--gold); font-weight: bold; }
+
+        @media (max-width: 600px) { .info-grid { grid-template-columns: 1fr; } .member-card { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">লোন সদস্য তালিকা</div>
+    </div>
+
+    <!-- Search -->
+    <div class="search-container">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="সদস্যের নাম বা আইডি দিয়ে খুঁজুন..." onkeyup="filterMembers()">
+        </div>
+    </div>
+
+    <div id="loader" class="loader"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><br>ডাটা লোড হচ্ছে...</div>
+
+    <div class="list-container" id="loan-member-list"></div>
+
+    <!-- ================= MODAL ================= -->
+    <div id="detailModal" class="full-modal">
+        <div class="modal-nav">
+            <i class="fa-solid fa-xmark close-btn" onclick="closeModal()"></i>
+            <span style="font-weight: bold;">সদস্য লোন প্রোফাইল</span>
+            <span></span>
+        </div>
+        <div class="modal-content" id="modal-data"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let loanMembers = [];
+
+        function fetchLoanMembers() {
+            db.collection('users').onSnapshot(snap => {
+                const listDiv = document.getElementById('loan-member-list');
+                listDiv.innerHTML = ''; loanMembers = [];
+                snap.forEach(doc => {
+                    const u = doc.data();
+                    const due = Number(u.loanDue || 0);
+                    const paid = Number(u.loanRepaid || 0);
+                    if (due > 0 || paid > 0) {
+                        u.uid = doc.id;
+                        loanMembers.push(u);
+                        listDiv.innerHTML += `
+                            <div class="member-card">
+                                <img src="${u.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png'}" class="m-img">
+                                <div class="m-info">
+                                    <h4>${u.fullName}</h4>
+                                    <p>ID: ${u.memberId} | <i class="fa-solid fa-phone"></i> ${u.phone}</p>
+                                    <div class="m-stats">
+                                        <span class="stat-badge bg-paid">পরিশোধিত: ৳${paid.toFixed(0)}</span>
+                                        <span class="stat-badge bg-due">বাকি: ৳${due.toFixed(0)}</span>
+                                    </div>
+                                </div>
+                                <button class="btn-detail" onclick="openFullProfile('${u.uid}')">বিস্তারিত</button>
+                            </div>`;
+                    }
+                });
+                document.getElementById('loader').style.display = 'none';
+            });
+        }
+
+        async function openFullProfile(uid) {
+            const member = loanMembers.find(m => m.uid === uid);
+            const modalData = document.getElementById('modal-data');
+            document.getElementById('detailModal').style.display = 'block';
+            modalData.innerHTML = '<p style="text-align:center; padding:20px;">হিসাব লোড হচ্ছে...</p>';
+
+            try {
+                // সদস্যের অনুমোদিত লোন রিকোয়েস্ট থেকে তথ্য আনা
+                const loanSnap = await db.collection('loan_applications')
+                    .where('uid', '==', uid)
+                    .where('status', '==', 'approved')
+                    .get();
+
+                let loanInfo = { loanAmount: 0, durationMonths: 'N/A', interestRate: 0, appliedDate: 'N/A', totalPayable: '৳ 0', installmentAmount: '৳ 0', method: 'N/A', repaymentRule: 'N/A' };
+                
+                if (!loanSnap.empty) {
+                    let allLoans = [];
+                    loanSnap.forEach(d => allLoans.push(d.data()));
+                    allLoans.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                    loanInfo = allLoans[0];
+                }
+
+                // লোন শেষ হওয়ার সম্ভাব্য তারিখ
+                let endDate = "N/A";
+                if(loanInfo.timestamp) {
+                    let d = loanInfo.timestamp.toDate();
+                    let monthsToAdd = Number(loanInfo.durationMonths) || 0;
+                    d.setMonth(d.getMonth() + monthsToAdd);
+                    endDate = d.toLocaleDateString('bn-BD');
+                }
+
+                const html = `
+                    <div class="loan-calc-card">
+                        <div class="sec-title" style="color:var(--gold); border-bottom-color:#444;"><i class="fa-solid fa-chart-line"></i> লোন পরিসংখ্যান ও কিস্তি পরিকল্পনা</div>
+                        <div class="info-grid">
+                            <div class="info-item"><span class="label">অনুমোদিত লোন:</span><span class="val">৳ ${loanInfo.loanAmount}</span></div>
+                            <div class="info-item"><span class="label">লোনের মেয়াদ:</span><span class="val">${loanInfo.durationMonths} মাস</span></div>
+                            <div class="info-item"><span class="label">পরিশোধের নিয়ম:</span><span class="val">${loanInfo.repaymentRule}</span></div>
+                            <div class="info-item"><span class="label">লভ্যাংশ হার:</span><span class="val">${loanInfo.interestRate}%</span></div>
+                            <div class="info-item"><span class="label">মোট বকেয়া (আসল+লাভ):</span><span class="val">৳ ${member.loanDue.toFixed(2)}</span></div>
+                            <div class="info-item"><span class="label">মোট পরিশোধিত:</span><span class="val" style="color:var(--green);">৳ ${member.loanRepaid.toFixed(2)}</span></div>
+                            <div class="info-item"><span class="label">কিস্তির পরিমাণ (সঞ্চয়সহ):</span><span class="val">${loanInfo.installmentAmount}</span></div>
+                            <div class="info-item"><span class="label">লোন শুরুর তারিখ:</span><span class="val">${loanInfo.appliedDate}</span></div>
+                            <div class="info-item" style="border:none;"><span class="label">লোন শেষ তারিখ:</span><span class="val" style="color:var(--gold);">${endDate}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="sec-title"><i class="fa-solid fa-user-tie"></i> সদস্যের ব্যক্তিগত তথ্য ও ঠিকানা</div>
+                        <div class="info-grid">
+                            <div class="info-item"><span class="label">পূর্ণ নাম:</span><span class="val">${member.fullName}</span></div>
+                            <div class="info-item"><span class="label">পিতার নাম:</span><span class="val">${member.fatherName || '-'}</span></div>
+                            <div class="info-item"><span class="label">মোবাইল:</span><span class="val">${member.phone}</span></div>
+                            <div class="info-item"><span class="label">পেশা:</span><span class="val">${member.occupation || '-'}</span></div>
+                            <div class="info-item" style="grid-column: span 2;"><span class="label">স্থায়ী ঠিকানা:</span><span class="val">${member.village}, ${member.union}, ${member.thana}, ${member.district}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="sec-title"><i class="fa-solid fa-users"></i> নমিনির বিস্তারিত তথ্য</div>
+                        <div class="info-grid">
+                            <div class="info-item"><span class="label">নমিনির নাম:</span><span class="val">${member.nomineeName || '-'}</span></div>
+                            <div class="info-item"><span class="label">সম্পর্ক:</span><span class="val">${member.nomineeRelation || '-'}</span></div>
+                            <div class="info-item"><span class="label">নমিনির মোবাইল:</span><span class="val">${member.nomineePhone || '-'}</span></div>
+                            <div class="info-item" style="grid-column: span 2;"><span class="label">নমিনির ঠিকানা:</span><span class="val">${member.nomineeVillage || '-'}, ${member.nomineeUnion || '-'}, ${member.nomineeThana || '-'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="sec-title"><i class="fa-solid fa-money-check-dollar"></i> পেমেন্ট ও বিতরণ তথ্য</div>
+                        <div class="info-grid">
+                            <div class="info-item"><span class="label">বিতরণ মাধ্যম:</span><span class="val">${loanInfo.method}</span></div>
+                            <div class="info-item"><span class="label">একাউন্ট/মোবাইল নং:</span><span class="val">${loanInfo.mobileAccount || loanInfo.bankAccNo || '-'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="sec-title"><i class="fa-solid fa-images"></i> আপলোডকৃত ডকুমেন্টস</div>
+                        <div class="doc-gallery">
+                            <div class="doc-box"><img src="${member.photoUrl}" class="doc-img" onclick="window.open(this.src)"><p style="font-size:10px; color:#777; margin-top:5px;">সদস্যের ছবি</p></div>
+                            <div class="doc-box"><img src="${member.nidFrontUrl}" class="doc-img" onclick="window.open(this.src)"><p style="font-size:10px; color:#777; margin-top:5px;">NID (সামনে)</p></div>
+                            <div class="doc-box"><img src="${member.signUrl}" class="doc-img" onclick="window.open(this.src)"><p style="font-size:10px; color:#777; margin-top:5px;">স্বাক্ষর</p></div>
+                            <div class="doc-box"><img src="${member.nomineePhotoUrl}" class="doc-img" onclick="window.open(this.src)"><p style="font-size:10px; color:#777; margin-top:5px;">নমিনির ছবি</p></div>
+                        </div>
+                    </div>
+                `;
+                modalData.innerHTML = html;
+            } catch (error) { modalData.innerHTML = '<p style="color:red; text-align:center;">তথ্য লোড ব্যর্থ হয়েছে!</p>'; }
+        }
+
+        function filterMembers() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.getElementsByClassName('member-card');
+            for (let card of cards) {
+                card.style.display = card.innerText.toLowerCase().includes(query) ? 'flex' : 'none';
+            }
+        }
+
+        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+        fetchLoanMembers();
+    </script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সিস্টেম সেটিংস - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        /* Golden Card Styling */
+        .settings-card {
+            background: white; border-radius: 15px; padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-top: 5px solid var(--gold);
+            display: flex; flex-direction: column;
+        }
+        .card-title { font-size: 16px; font-weight: bold; color: var(--gold-dark); margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; background: #fafafa; transition: 0.3s; }
+        .form-control:focus { border-color: var(--gold); background: #fff; }
+
+        /* Buttons */
+        .btn-save { width: 100%; padding: 12px; background: var(--dark); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        .btn-save:hover { background: var(--gold); }
+        
+        /* Director Image Upload */
+        .dir-img-box { text-align: center; margin-bottom: 15px; }
+        .dir-preview { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; margin-bottom: 8px; cursor: pointer; }
+
+        @media (max-width: 700px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">সিস্টেম কন্ট্রোল সেটিংস</div>
+    </div>
+
+    <div class="container">
+        
+        <!-- ১. সদস্য লিমিট সেটিংস -->
+        <div class="settings-card">
+            <div class="card-title"><i class="fa-solid fa-sliders"></i> সদস্য লেনদেন লিমিট</div>
+            <div class="form-group">
+                <label>সর্বোচ্চ দৈনিক জমা (৳)</label>
+                <input type="number" id="limit-deposit" class="form-control" placeholder="যেমন: ৫০০০">
+            </div>
+            <div class="form-group">
+                <label>সর্বোচ্চ দৈনিক উত্তোলন (৳)</label>
+                <input type="number" id="limit-withdraw" class="form-control" placeholder="যেমন: ২০০০">
+            </div>
+            <div class="form-group">
+                <label>সর্বোচ্চ লোন লিমিট (৳)</label>
+                <input type="number" id="limit-loan" class="form-control" placeholder="যেমন: ৫০,০০০">
+            </div>
+            <button class="btn-save" onclick="saveLimits()">লিমিট আপডেট করুন</button>
+        </div>
+
+        <!-- ২. অফিস ও যোগাযোগ -->
+        <div class="settings-card">
+            <div class="card-title"><i class="fa-solid fa-building"></i> অফিস ও যোগাযোগ</div>
+            <div class="form-group">
+                <label>প্রধান কার্যালয়</label>
+                <input type="text" id="office-head" class="form-control" placeholder="ঠিকানা লিখুন">
+            </div>
+            <div class="form-group">
+                <label>শাখা কার্যালয়</label>
+                <input type="text" id="office-branch" class="form-control" placeholder="শাখার ঠিকানা">
+            </div>
+            <div class="form-group">
+                <label>অফিস মোবাইল নাম্বার</label>
+                <input type="text" id="office-mobile" class="form-control" placeholder="০১৭০০-০০০০০০">
+            </div>
+            <button class="btn-save" onclick="saveOfficeInfo()">অফিস তথ্য সেভ করুন</button>
+        </div>
+
+        <!-- ৩. পরিচালক তথ্য -->
+        <div class="settings-card">
+            <div class="card-title"><i class="fa-solid fa-user-tie"></i> পরিচালকের তথ্য</div>
+            <div class="dir-img-box">
+                <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="dir-preview" class="dir-preview" title="ছবি পরিবর্তন করতে ক্লিক করুন" onclick="document.getElementById('dir-file').click()">
+                <input type="file" id="dir-file" hidden accept="image/*" onchange="uploadDirectorImg(this)">
+                <p style="font-size: 10px; color: #888;">ছবি পরিবর্তনের জন্য উপরে ক্লিক করুন</p>
+            </div>
+            <div class="form-group">
+                <label>পরিচালকের নাম</label>
+                <input type="text" id="dir-name" class="form-control" placeholder="নাম লিখুন">
+            </div>
+            <div class="form-group">
+                <label>পরিচালকের মোবাইল নং</label>
+                <input type="text" id="dir-mobile" class="form-control" placeholder="০১৭০০-০০০০০০">
+            </div>
+            <button class="btn-save" id="btn-dir-save" onclick="saveDirectorInfo()">পরিচালক তথ্য আপডেট</button>
+        </div>
+
+        <!-- ৪. নোটিশ বোর্ড -->
+        <div class="settings-card">
+            <div class="card-title"><i class="fa-solid fa-bullhorn"></i> নতুন নোটিশ বোর্ড</div>
+            <div class="form-group">
+                <label>নোটিশ বিষয়</label>
+                <input type="text" id="notice-subject" class="form-control" placeholder="যেমন: লোন সংক্রান্ত নোটিশ">
+            </div>
+            <div class="form-group">
+                <label>নোটিশ বিস্তারিত</label>
+                <textarea id="notice-text" class="form-control" rows="4" placeholder="বিস্তারিত নোটিশ এখানে লিখুন..."></textarea>
+            </div>
+            <button class="btn-save" style="background: var(--gold-dark);" onclick="postNotice()">নোটিশ পাবলিশ করুন</button>
+        </div>
+
+    </div>
+
+    <script>
+        // ১. ফায়ারবেস কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const IMGBB_API_KEY = "8162739127c52b219b2e17d2c6373d55";
+
+        // ২. বর্তমান ডাটা লোড করা
+        async function fetchSettings() {
+            // লিমিট লোড
+            db.collection('settings').doc('limits').get().then(doc => {
+                if(doc.exists) {
+                    const d = doc.data();
+                    document.getElementById('limit-deposit').value = d.deposit || "";
+                    document.getElementById('limit-withdraw').value = d.withdraw || "";
+                    document.getElementById('limit-loan').value = d.loan || "";
+                }
+            });
+
+            // অফিস তথ্য লোড
+            db.collection('settings').doc('officeInfo').get().then(doc => {
+                if(doc.exists) {
+                    const d = doc.data();
+                    document.getElementById('office-head').value = d.headOffice || "";
+                    document.getElementById('office-branch').value = d.branchOffice || "";
+                    document.getElementById('office-mobile').value = d.mobile || "";
+                }
+            });
+
+            // পরিচালক তথ্য লোড
+            db.collection('settings').doc('appInfo').get().then(doc => {
+                if(doc.exists) {
+                    const d = doc.data();
+                    document.getElementById('dir-name').value = d.directorName || "";
+                    document.getElementById('dir-mobile').value = d.directorPhone || "";
+                    if(d.directorImg) document.getElementById('dir-preview').src = d.directorImg;
+                }
+            });
+        }
+
+        // ৩. লজিক: লিমিট সেভ
+        async function saveLimits() {
+            const data = {
+                deposit: document.getElementById('limit-deposit').value,
+                withdraw: document.getElementById('limit-withdraw').value,
+                loan: document.getElementById('limit-loan').value
+            };
+            await db.collection('settings').doc('limits').set(data, {merge: true});
+            alert("সদস্য লিমিট সফলভাবে আপডেট হয়েছে!");
+        }
+
+        // ৪. লজিক: অফিস তথ্য সেভ
+        async function saveOfficeInfo() {
+            const data = {
+                headOffice: document.getElementById('office-head').value,
+                branchOffice: document.getElementById('office-branch').value,
+                mobile: document.getElementById('office-mobile').value
+            };
+            await db.collection('settings').doc('officeInfo').set(data, {merge: true});
+            alert("অফিস তথ্য সফলভাবে আপডেট হয়েছে!");
+        }
+
+        // ৫. লজিক: পরিচালক ছবি আপলোড (ImgBB)
+        async function uploadDirectorImg(input) {
+            const file = input.files[0];
+            if(!file) return;
+
+            const btn = document.getElementById('btn-dir-save');
+            btn.disabled = true; btn.innerText = "ছবি আপলোড হচ্ছে...";
+
+            const formData = new FormData();
+            formData.append("image", file);
+
+            try {
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
+                const result = await res.json();
+                if(result.success) {
+                    const url = result.data.url;
+                    document.getElementById('dir-preview').src = url;
+                    // সরাসরি ফায়ারবেসেও আপডেট করে দিচ্ছি যাতে ইউজার ভুল না করে
+                    await db.collection('settings').doc('appInfo').set({ directorImg: url }, { merge: true });
+                    alert("পরিচালকের ছবি আপলোড হয়েছে!");
+                }
+            } catch (e) { alert("ছবি আপলোড ব্যর্থ!"); }
+            finally { btn.disabled = false; btn.innerText = "পরিচালক তথ্য আপডেট"; }
+        }
+
+        // ৬. লজিক: পরিচালক তথ্য সেভ
+        async function saveDirectorInfo() {
+            const data = {
+                directorName: document.getElementById('dir-name').value,
+                directorPhone: document.getElementById('dir-mobile').value,
+                directorImg: document.getElementById('dir-preview').src
+            };
+            await db.collection('settings').doc('appInfo').set(data, {merge: true});
+            alert("পরিচালক তথ্য সফলভাবে আপডেট হয়েছে!");
+        }
+
+        // ৭. লজিক: নোটিশ পাবলিশ
+        async function postNotice() {
+            const sub = document.getElementById('notice-subject').value.trim();
+            const text = document.getElementById('notice-text').value.trim();
+            if(!sub || !text) return alert("বিষয় এবং বিস্তারিত লিখুন!");
+
+            const date = new Date().toLocaleDateString('bn-BD'); // অটো বাংলা তারিখ
+
+            try {
+                await db.collection('notices').add({
+                    subject: sub,
+                    message: text,
+                    date: date,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                alert("নোটিশটি সদস্য প্যানেলে পাবলিশ করা হয়েছে!");
+                document.getElementById('notice-subject').value = '';
+                document.getElementById('notice-text').value = '';
+            } catch (e) { alert("ব্যর্থ হয়েছে!"); }
+        }
+
+        // পেজ লোড হলে আগের ডাটা নিয়ে আসা
+        fetchSettings();
+    </script>
+</body>
+</html>

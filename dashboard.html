@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অ্যাডমিন ড্যাশবোর্ড</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #2c3e50;
+            --light: #f4f6f9;
+            --green: #27ae60;
+            --red: #c0392b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--light); padding-bottom: 50px; overflow-x: hidden; }
+
+        /* ================= সাইডবার মেনু ================= */
+        .sidebar-menu {
+            position: fixed; left: -250px; top: 0; width: 250px; height: 100%;
+            background: var(--dark); color: white; transition: 0.3s; z-index: 2000;
+            padding-top: 60px; box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+        }
+        .sidebar-menu.active { left: 0; }
+        .sidebar-item {
+            padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: block; color: white; text-decoration: none; transition: 0.2s;
+        }
+        .sidebar-item:hover { background: var(--gold); }
+        .close-menu {
+            position: absolute; top: 10px; right: 15px; font-size: 25px; cursor: pointer; color: #fff;
+        }
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 1500; display: none;
+        }
+
+        /* ================= হেডার ডিজাইন ================= */
+        .header {
+            background: white; padding: 15px 20px; display: flex; align-items: center;
+            justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .menu-btn { font-size: 24px; cursor: pointer; color: var(--dark); }
+        .logo-container {
+            width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--gold);
+            overflow: hidden; cursor: pointer; position: relative;
+        }
+        .logo-img { width: 100%; height: 100%; object-fit: cover; }
+        .app-name { 
+            font-size: 18px; font-weight: bold; color: var(--dark); 
+            border-bottom: 1px dashed transparent; cursor: text; padding: 0 5px;
+        }
+        .app-name:focus { border-bottom: 1px dashed var(--gold); outline: none; background: #fff8dc; }
+
+        /* ================= স্ট্যাটাস কার্ডস ================= */
+        .stats-container {
+            padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+        }
+        .card {
+            background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            text-align: center; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center;
+        }
+        .card h3 { font-size: 12px; color: #7f8c8d; margin-bottom: 5px; }
+        .card h1 { font-size: 18px; color: var(--dark); font-weight: bold; }
+        
+        .card-savings { grid-column: span 1; background: linear-gradient(135deg, #2c3e50, #000000); color: white !important; }
+        .card-savings h3, .card-savings h1 { color: white !important; }
+        .card-loan-repaid { border-bottom: 4px solid var(--green); }
+        .card-loan-due { border-bottom: 4px solid var(--red); }
+        .card-active { border-bottom: 4px solid var(--gold); }
+        .card-pending { border-bottom: 4px solid #f39c12; }
+
+        /* ================= ফিচার গ্রিড ================= */
+        .section-title { margin: 20px 20px 10px 20px; font-size: 16px; color: #444; border-left: 4px solid var(--gold); padding-left: 10px; }
+        .features-grid { padding: 0 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .feature-btn {
+            background: white; padding: 15px 5px; border-radius: 10px; text-align: center;
+            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-decoration: none;
+            color: var(--dark); border: 1px solid transparent; transition: 0.2s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .feature-btn:hover { border-color: var(--gold); transform: translateY(-3px); }
+        .feature-icon { font-size: 20px; color: var(--gold); margin-bottom: 8px; }
+        .feature-title { font-size: 11px; font-weight: 600; line-height: 1.2; }
+
+        /* ================= মডাল / পপ-আপ ডিজাইন ================= */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s;
+        }
+        .modal-content {
+            background-color: #fefefe; margin: 2% auto; padding: 0; border-radius: 10px;
+            width: 95%; max-width: 500px; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s;
+        }
+        .modal-header {
+            background: var(--gold); color: white; padding: 15px; border-radius: 10px 10px 0 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .close-btn { color: white; font-size: 24px; font-weight: bold; cursor: pointer; }
+        .modal-body { padding: 15px; max-height: 80vh; overflow-y: auto; }
+
+        /* Approval List Design */
+        .list-item { display: flex; align-items: center; background: #fff; padding: 10px; border-bottom: 1px solid #eee; gap: 10px; }
+        .list-img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd; }
+        .list-info { flex: 1; }
+        .list-info h4 { font-size: 14px; margin-bottom: 2px; }
+        .list-info p { font-size: 11px; color: #666; }
+        .btn-small { padding: 6px 10px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; color: white; margin-left: 2px; }
+        .btn-approve { background: var(--green); }
+        .btn-reject { background: var(--red); }
+        .btn-detail { background: var(--dark); }
+
+        /* Detailed Member View (Card Style) */
+        .detail-section { margin-bottom: 15px; border: 1px solid #eee; border-radius: 8px; padding: 10px; background: #f9f9f9; }
+        .detail-title { font-size: 14px; font-weight: bold; color: var(--gold); border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; }
+        
+        /* 2-Column Grid for Details */
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; }
+        
+        .info-row { 
+            display: flex; justify-content: space-between; margin-bottom: 0; 
+            font-size: 13px; border-bottom: 1px dashed #e0e0e0; padding-bottom: 4px; 
+        }
+        .full-width { grid-column: span 2; }
+        .info-label { color: #666; font-weight: 600; white-space: nowrap; }
+        .info-val { color: #333; text-align: right; word-break: break-word; }
+        
+        .doc-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .doc-item { text-align: center; }
+        .doc-img { width: 100%; height: 100px; object-fit: cover; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; }
+        .doc-label { font-size: 11px; color: #555; margin-top: 2px; }
+
+        /* অ্যানিমেশন */
+        @keyframes fadeIn { from {opacity: 0;} to {opacity: 1;} }
+        @keyframes slideUp { from {transform: translateY(50px);} to {transform: translateY(0);} }
+
+        /* ইনপুট ফিল্ড */
+        .form-input { width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 5px; }
+        .btn-full { width: 100%; padding: 12px; background: var(--gold); color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; font-weight: bold; }
+		
+		.feature-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+    height: 40px; /* আইকনের জায়গার উচ্চতা */
+}
+
+.feature-icon img {
+    width: 30px;  /* আপনি চাইলে ছোট-বড় করতে পারেন */
+    height: 30px;
+    object-fit: contain;
+}
+    </style>
+</head>
+<body>
+
+    <!-- ================= সাইডবার মেনু ================= -->
+    <div id="menu-overlay" class="overlay" onclick="toggleMenu()"></div>
+    <div id="sidebar-menu" class="sidebar-menu">
+        <span class="close-menu" onclick="toggleMenu()">&times;</span>
+        <div style="text-align: center; padding: 20px;">
+            <i class="fa-solid fa-shield-halved" style="font-size: 40px; color: var(--gold);"></i>
+            <h4 style="margin-top: 10px;">অ্যাডমিন মেনু</h4>
+        </div>
+        <a href="dashboard.html" class="sidebar-item"><i class="fa-solid fa-gauge"></i> ড্যাশবোর্ড</a>
+        <a href="settings.html" class="sidebar-item"><i class="fa-solid fa-gear"></i> সেটিংস</a>
+        <a href="#" class="sidebar-item" onclick="auth.signOut()"><i class="fa-solid fa-right-from-bracket"></i> লগআউট</a>
+    </div>
+
+    <!-- ================= ১. হেডার ================= -->
+    <div class="header">
+        <div class="header-left">
+            <i class="fa-solid fa-bars menu-btn" onclick="toggleMenu()"></i>
+            <div class="logo-container" onclick="triggerLogoUpload()">
+                <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" id="app-logo" class="logo-img">
+            </div>
+            <input type="file" id="logo-input" style="display: none;" accept="image/*" onchange="uploadLogo()">
+            <div class="app-name" id="org-name" contenteditable="true" onblur="updateOrgName()">লোডিং...</div>
+        </div>
+        <i class="fa-solid fa-bell" style="font-size: 22px; color: var(--gold); cursor: pointer;" onclick="sendNotification()"></i>
+    </div>
+
+    <!-- ================= ২. স্ট্যাটাস কার্ড ================= -->
+    <div class="stats-container">
+        <div class="card card-savings">
+            <h3>মোট সেভিংস</h3> <h1 id="total-savings">৳ ০</h1>
+        </div>
+        <div class="card card-loan-repaid">
+            <h3>লোন পরিশোধ</h3> <h1 id="loan-repaid">৳ ০</h1>
+        </div>
+        <div class="card card-loan-due">
+            <h3>লোন বাকি</h3> <h1 id="loan-due">৳ ০</h1>
+        </div>
+        <div class="card">
+            <h3>মোট ফান্ড</h3> <h1 id="total-fund">৳ ০</h1>
+        </div>
+        <div class="card card-active">
+            <h3>অ্যাক্টিভ সদস্য</h3> <h1 id="active-members">০</h1>
+        </div>
+        <div class="card card-pending">
+            <h3>অপেক্ষমান</h3> <h1 id="pending-members">০</h1>
+        </div>
+    </div>
+
+    <!-- ================= ৩. ফিচার কন্ট্রোলার ================= -->
+    <div class="section-title">ফিচার কন্ট্রোলার</div>
+    <div class="features-grid">
+        <div class="feature-btn" onclick="openModal('modal-approval')">
+    <img src="acaprov.png" style="width: 35px; height: 35px; object-fit: contain;">
+    <span class="feature-title">১. সদস্য Approval</span>
+	</div>
+        <a href="member-list.html" class="feature-btn">
+            <img src="list.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">২. সদস্য তালিকা</span>
+        </a>
+        <a href="member-update.html" class="feature-btn">
+            <img src="edit.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">৩. তথ্য আপডেট</span>
+        </a>
+        <div class="feature-btn" onclick="openModal('modal-fund-deposit')">
+            <img src="donation.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">৪. ফান্ড জমা</span>
+        </div>
+        <a href="deposit.html" class="feature-btn">
+            <img src="deposit.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">৫. জমা করুন</span>
+        </a>
+        <a href="withdraw.html" class="feature-btn">
+            <img src="withdraw.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">৬. উত্তোলন করুন</span>
+        </a>
+        <a href="loan-pay.html" class="feature-btn">
+            <img src="borrow.png" style="width: 35px; height: 35px; object-fit: contain;"></i><span class="feature-title">৭. লোন পরিশোধ</span>
+        </a>
+        <div class="feature-btn" onclick="openModal('modal-interest')">
+    <img src="home.png" style="width: 35px; height: 35px; object-fit: contain;">
+    <span class="feature-title">৮. লোন লাভ % সেট</span>
+    <!-- নিচে এই নতুন অংশটুকু বর্তমান পার্সেন্টেজ দেখাবে -->
+    <div style="font-size: 10px; color: var(--red); font-weight: bold; margin-top: 2px;">
+        (বর্তমানে: <span id="btn-interest-val">০</span>%)
+    </div>
+</div>
+        <a href="deposit-request.html" class="feature-btn">
+            <img src="done.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">৯. জমা Aprov</span>
+        </a>
+        <a href="withdraw-request.html" class="feature-btn">
+            <img src="withdra.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১০. উত্তোলন Aprov</span>
+        </a>
+        <a href="loan-request.html" class="feature-btn">
+            <img src="real-estate.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১১. লোন Aprov</span>
+        </a>
+        <a href="loan-apply-admin.html" class="feature-btn">
+            <img src="loan.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১২. লোন আবেদন</span>
+        </a>
+        <a href="fund-statement.html" class="feature-btn">
+            <img src="cash-flow.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৩. ফান্ড স্টেটমেন্ট</span>
+        </a>
+        <a href="member-statement.html" class="feature-btn">
+            <img src="statement.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৪. সদস্য স্টেটমেন্ট</span>
+        </a>
+        <a href="loan-members.html" class="feature-btn">
+            <img src="evaluation.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৫. লোন স্টেটমেন্ট</span>
+        </a>
+        <a href="loan-paid-list.html" class="feature-btn">
+            <img src="lonee.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৬. লোন বিস্তারিত</span>
+        </a>
+        <a href="loan-due-list.html" class="feature-btn">
+            <img src="money.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৭. লোন বাকি</span>
+        </a>
+        <a href="complaints.html" class="feature-btn">
+            <img src="sms.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৮. লাইভ চ্যাট</span>
+        </a>
+        <a href="call-center.html" class="feature-btn">
+           <img src="customer-service.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">১৯. কল সেন্টার</span>
+        </a>
+        <a href="payment-number.html" class="feature-btn">
+           <img src="security-number.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">২০. পেমেন্ট নাম্বার</span>
+        </a>
+        <!-- ২২. স্লাইডার আপডেট -->
+        <a href="sliders.html" class="feature-btn">
+            <i class="feature-icon fa-solid fa-images"></i>
+            <span class="feature-title">২১. স্লাইডার আপডেট</span>
+        </a>
+		<a href="fund-withdraw.html" class="feature-btn">
+           <img src="with.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">২২. ফান্ড উত্তোলন</span>
+        </a>
+		<a href="account-close.html" class="feature-btn">
+            <img src="delete-user.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">২৩. একাউন্ট ক্লোজ</span>
+        </a>
+		<a href="loan-close.html" class="feature-btn">
+            <img src="lone close.png" style="width: 35px; height: 35px; object-fit: contain;"><span class="feature-title">২৩. লোন ক্লোজ</span>
+        </a>
+    </div>
+
+    <!-- ================= MODALS ================= -->
+
+    <!-- ১. সদস্য Approval Modal -->
+    <div id="modal-approval" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>সদস্য অ্যাপ্রুভাল রিকোয়েস্ট</h3>
+                <span class="close-btn" onclick="closeModal('modal-approval')">&times;</span>
+            </div>
+            <div class="modal-body" id="approval-list-body">
+                <p style="text-align: center;">লোডিং...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- সদস্য ডিটেইলস মডাল (Full Detail View) -->
+    <div id="modal-member-detail" class="modal" style="z-index: 1001;">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--dark);">
+                <h3>সদস্যের পূর্ণ বিবরণ</h3>
+                <span class="close-btn" onclick="document.getElementById('modal-member-detail').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body" id="member-detail-body">
+                <!-- ডায়নামিক ডাটা এখানে আসবে -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ৪. ফান্ড জমা Modal -->
+    <div id="modal-fund-deposit" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>ফান্ডে টাকা জমা দিন</h3>
+                <span class="close-btn" onclick="closeModal('modal-fund-deposit')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <label>টাকার পরিমাণ</label>
+                <input type="number" id="fund-amount" class="form-input" placeholder="৳ 0.00">
+                <label>জমার কারণ / উৎস</label>
+                <input type="text" id="fund-source" class="form-input" placeholder="যেমন: সরকারি অনুদান">
+                <button class="btn-full" onclick="submitFundDeposit()">জমা নিশ্চিত করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ৮. লোন ইন্টারেস্ট সেট Modal -->
+    <div id="modal-interest" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>লোনের লভ্যাংশ (%) সেট করুন</h3>
+                <span class="close-btn" onclick="closeModal('modal-interest')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- এখানে বর্তমান রেট দেখাবে -->
+                <p style="text-align: center; background: #fff8dc; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-weight: bold;">
+                    বর্তমানে সেট করা আছে: <span id="display-current-rate" style="color: var(--red);">০</span>%
+                </p>
+                
+                <label>নতুন বার্ষিক লভ্যাংশ (%)</label>
+                <input type="number" id="interest-rate" class="form-input" placeholder="যেমন: 10">
+                <button class="btn-full" onclick="saveInterestRate()">সেভ করুন</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+       
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        const IMGBB_API_KEY = "8162739127c52b219b2e17d2c6373d55";
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        auth.onAuthStateChanged((user) => {
+            if (!user) window.location.href = "index.html";
+            else {
+                db.collection('users').doc(user.uid).get().then(doc => {
+                    if(doc.data().role !== 'admin') { auth.signOut(); window.location.href = "index.html"; }
+                    else { 
+                        loadDashboardStats(); 
+                        loadHeaderSettings();
+						loadCurrentInterestRate();
+                    }
+                });
+            }
+        });
+
+        // ================= ২. হেডার & মেনু =================
+        function toggleMenu() {
+            document.getElementById('sidebar-menu').classList.toggle('active');
+            const overlay = document.getElementById('menu-overlay');
+            overlay.style.display = overlay.style.display === 'block' ? 'none' : 'block';
+        }
+        function loadHeaderSettings() {
+            db.collection('settings').doc('appInfo').onSnapshot(doc => {
+                if(doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('org-name').innerText = data.orgName || "সোনালী ফাউন্ডেশন";
+                    if(data.logoUrl) document.getElementById('app-logo').src = data.logoUrl;
+                } else {
+                    db.collection('settings').doc('appInfo').set({ orgName: "সোনালী ফাউন্ডেশন" });
+                }
+            });
+        }
+        function updateOrgName() {
+            const newName = document.getElementById('org-name').innerText;
+            db.collection('settings').doc('appInfo').set({ orgName: newName }, { merge: true });
+        }
+        function triggerLogoUpload() { document.getElementById('logo-input').click(); }
+        async function uploadLogo() {
+            const file = document.getElementById('logo-input').files[0];
+            if(!file) return;
+            const formData = new FormData();
+            formData.append("image", file);
+            try {
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
+                const data = await res.json();
+                if(data.success) {
+                    await db.collection('settings').doc('appInfo').set({ logoUrl: data.data.url }, { merge: true });
+                    alert("লোগো আপডেট হয়েছে!");
+                }
+            } catch(e) { console.error(e); alert("লোগো আপলোডে সমস্যা"); }
+        }
+        function sendNotification() {
+            const msg = prompt("সকল সদস্যকে কি বার্তা পাঠাতে চান?");
+            if(msg) {
+                db.collection('notifications').add({
+                    message: msg,
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    sender: "Admin"
+                }).then(() => alert("নোটিফিকেশন পাঠানো হয়েছে!"));
+            }
+        }
+
+        // ================= ৩. সদস্য Approval (বিস্তারিত ভিউ আপডেট) =================
+        function loadPendingMembers() {
+            const listBody = document.getElementById('approval-list-body');
+            listBody.innerHTML = '<p style="text-align:center;">ডাটা লোড হচ্ছে...</p>';
+            db.collection('users').where('status', '==', 'pending').get().then(snap => {
+                if(snap.empty) {
+                    listBody.innerHTML = '<p style="text-align:center;">কোনো পেন্ডিং রিকোয়েস্ট নেই</p>';
+                    return;
+                }
+                let html = '';
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const img = data.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png';
+                    html += `
+                        <div class="list-item">
+                            <img src="${img}" class="list-img">
+                            <div class="list-info">
+                                <h4>${data.fullName}</h4>
+                                <p>${data.phone}</p>
+                            </div>
+                            <button class="btn-small btn-detail" onclick="viewMemberDetail('${doc.id}')">বিস্তারিত</button>
+                            <button class="btn-small btn-approve" onclick="approveMember('${doc.id}')">Approve</button>
+                            <button class="btn-small btn-reject" onclick="rejectMember('${doc.id}')">Reject</button>
+                        </div>
+                    `;
+                });
+                listBody.innerHTML = html;
+            });
+        }
+
+        // সদস্যের পূর্ণ বিস্তারিত দেখা (আপডেট: সব তথ্য যুক্ত করা হয়েছে)
+        function viewMemberDetail(uid) {
+            db.collection('users').doc(uid).get().then(doc => {
+                const d = doc.data();
+                const showImg = (url, label) => url ? 
+                    `<div class="doc-item"><img src="${url}" class="doc-img" onclick="window.open('${url}')"><div class="doc-label">${label}</div></div>` : '';
+
+                const html = `
+                    <div style="text-align:center; padding-bottom:15px;">
+                        <img src="${d.photoUrl}" style="width:80px; height:80px; border-radius:50%; border:2px solid var(--gold);">
+                        <h3>${d.fullName}</h3>
+                        <p style="font-size:12px; color:#666;">আবেদন তারিখ: ${d.regDate ? d.regDate : 'N/A'}</p>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-title">সদস্যের ব্যক্তিগত তথ্য</div>
+                        <div class="detail-grid">
+                            <div class="info-row"><span class="info-label">পিতা:</span><span class="info-val">${d.fatherName || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">মাতা:</span><span class="info-val">${d.motherName || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">মোবাইল:</span><span class="info-val">${d.phone || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">জন্ম:</span><span class="info-val">${d.dob || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">NID:</span><span class="info-val">${d.nid || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">পেশা:</span><span class="info-val">${d.occupation || '-'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-title">ঠিকানা</div>
+                        <div class="detail-grid">
+                            <div class="info-row"><span class="info-label">জেলা:</span><span class="info-val">${d.district || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">থানা:</span><span class="info-val">${d.thana || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">ইউনিয়ন/পৌর:</span><span class="info-val">${d.union || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">গ্রাম/মহল্লা:</span><span class="info-val">${d.village || '-'}</span></div>
+                            <div class="info-row full-width"><span class="info-label">বিস্তারিত:</span><span class="info-val">${d.address || '-'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-title">নমিনির বিস্তারিত তথ্য</div>
+                        <div class="detail-grid">
+                            <div class="info-row"><span class="info-label">নাম:</span><span class="info-val">${d.nomineeName || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">সম্পর্ক:</span><span class="info-val">${d.nomineeRelation || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">পিতা/স্বামী:</span><span class="info-val">${d.nomineeFatherName || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">মাতা:</span><span class="info-val">${d.nomineeMotherName || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">জন্ম:</span><span class="info-val">${d.nomineeDob || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">NID:</span><span class="info-val">${d.nomineeNid || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">মোবাইল:</span><span class="info-val">${d.nomineePhone || '-'}</span></div>
+                        </div>
+                        
+                        <!-- নমিনির ঠিকানা -->
+                        <div class="detail-title" style="margin-top:10px; border-top:1px dashed #ddd; padding-top:5px; font-size:12px;">নমিনির ঠিকানা</div>
+                        <div class="detail-grid">
+                            <div class="info-row"><span class="info-label">জেলা:</span><span class="info-val">${d.nomineeDistrict || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">থানা:</span><span class="info-val">${d.nomineeThana || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">ইউনিয়ন:</span><span class="info-val">${d.nomineeUnion || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">গ্রাম:</span><span class="info-val">${d.nomineeVillage || '-'}</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-title">পেমেন্ট ও রেজিষ্ট্রেশন ফি</div>
+                        <div class="detail-grid">
+                            <div class="info-row"><span class="info-label">পেমেন্ট মেথড:</span><span class="info-val">${d.paymentMethod || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">TrxID:</span><span class="info-val" style="color:var(--red); font-weight:bold;">${d.trxId || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">ফি পরিমাণ:</span><span class="info-val">৳ ১০০</span></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="detail-title">ডকুমেন্টস গ্যালারি</div>
+                        <div class="doc-gallery">
+                            ${showImg(d.photoUrl, "সদস্যের ছবি")}
+                            ${showImg(d.signUrl, "স্বাক্ষর")}
+                            ${showImg(d.nidFrontUrl, "সদস্য NID (সামনে)")}
+                            ${showImg(d.nidBackUrl, "সদস্য NID (পিছনে)")}
+                            ${showImg(d.nomineePhotoUrl, "নমিনির ছবি")}
+                            ${showImg(d.nomineeNidFrontUrl, "নমিনি NID (সামনে)")}
+                            ${showImg(d.nomineeNidBackUrl, "নমিনি NID (পিছনে)")}
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        <button class="btn-full" style="background:var(--green);" onclick="approveMember('${doc.id}')">Approve</button>
+                        <button class="btn-full" style="background:var(--red);" onclick="rejectMember('${doc.id}')">Reject</button>
+                    </div>
+                `;
+                document.getElementById('member-detail-body').innerHTML = html;
+                document.getElementById('modal-member-detail').style.display = 'block';
+            });
+        }
+
+        async function approveMember(uid) {
+            if(!confirm("নিশ্চিত অ্যাপ্রুভ করবেন?")) return;
+            try {
+                const snapshot = await db.collection('users').where('status', '==', 'active').get();
+                const newId = "SF-" + String(snapshot.size + 1).padStart(3, '0');
+                await db.collection('users').doc(uid).update({
+                    status: 'active', memberId: newId, approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                alert(`সদস্য অ্যাপ্রুভ হয়েছে! ID: ${newId}`);
+                document.getElementById('modal-member-detail').style.display = 'none';
+                loadPendingMembers();
+            } catch (e) { alert(e.message); }
+        }
+
+        function rejectMember(uid) {
+            if(confirm("বাতিল করবেন?")) {
+                db.collection('users').doc(uid).update({ status: 'rejected' })
+                .then(() => { 
+                    alert("বাতিল করা হয়েছে"); 
+                    document.getElementById('modal-member-detail').style.display = 'none';
+                    loadPendingMembers();
+                });
+            }
+        }
+
+        // ================= ৪. অন্যান্য লজিক =================
+        function loadDashboardStats() {
+            db.collection('users').onSnapshot(snap => {
+                let active = 0, pending = 0, savings = 0, loanRepaid = 0, loanDue = 0;
+                snap.forEach(d => {
+                    const data = d.data();
+                    if(data.status === 'active') active++;
+                    if(data.status === 'pending') pending++;
+                    savings += (Number(data.balance) || 0);
+                    loanRepaid += (Number(data.loanRepaid) || 0);
+                    loanDue += (Number(data.loanDue) || 0);
+                });
+                document.getElementById('active-members').innerText = active;
+                document.getElementById('pending-members').innerText = pending;
+                document.getElementById('total-savings').innerText = "৳ " + savings;
+                document.getElementById('loan-repaid').innerText = "৳ " + loanRepaid;
+                document.getElementById('loan-due').innerText = "৳ " + loanDue;
+            });
+            db.collection('settings').doc('fund').onSnapshot(doc => {
+                if(doc.exists) document.getElementById('total-fund').innerText = "৳ " + (doc.data().totalAmount || 0);
+            });
+        }
+
+        function submitFundDeposit() {
+            const amount = Number(document.getElementById('fund-amount').value);
+            const source = document.getElementById('fund-source').value;
+            if(!amount) return alert("টাকা দিন");
+            const fundRef = db.collection('settings').doc('fund');
+            db.runTransaction(async (t) => {
+                const doc = await t.get(fundRef);
+                const newTotal = (doc.exists ? doc.data().totalAmount : 0) + amount;
+                t.set(fundRef, { totalAmount: newTotal }, { merge: true });
+                t.set(db.collection('fund_transactions').doc(), { amount, source, type: 'deposit', date: firebase.firestore.FieldValue.serverTimestamp() });
+            }).then(() => { alert("জমা হয়েছে!"); closeModal('modal-fund-deposit'); });
+        }
+
+        // ডাটাবেস থেকে বর্তমান লভ্যাংশ % লোড করার ফাংশন
+        function loadCurrentInterestRate() {
+            db.collection('settings').doc('loanConfig').onSnapshot(doc => {
+                if (doc.exists) {
+                    const currentRate = doc.data().interestRate || 0;
+                    
+                    // মডালের ভেতরে বর্তমান সংখ্যা দেখাবে
+                    if(document.getElementById('display-current-rate')) {
+                        document.getElementById('display-current-rate').innerText = currentRate;
+                    }
+                    
+                    // ড্যাশবোর্ড বাটনের ওপর পার্সেন্টেজ দেখাবে
+                    if(document.getElementById('btn-interest-val')) {
+                        document.getElementById('btn-interest-val').innerText = currentRate;
+                    }
+
+                    // ইনপুট বক্সেও বর্তমান রেটটা অটোমেটিক বসে যাবে
+                    if(document.getElementById('interest-rate')) {
+                        document.getElementById('interest-rate').value = currentRate;
+                    }
+                }
+            });
+        }
+
+        // লভ্যাংশ সেভ করার ফাংশন (এটি আপনার আগের কোডে মিসিং ছিল)
+        function saveInterestRate() {
+            const rate = document.getElementById('interest-rate').value;
+            if(!rate) return alert("দয়া করে পার্সেন্টেজ লিখুন");
+            
+            db.collection('settings').doc('loanConfig').set({ 
+                interestRate: Number(rate) 
+            }, { merge: true })
+            .then(() => { 
+                alert("সাফল্যের সাথে সেভ হয়েছে!"); 
+                closeModal('modal-interest'); 
+            })
+            .catch(error => alert("সমস্যা: " + error.message));
+        }
+
+        
+
+        function openModal(id) {
+            document.getElementById(id).style.display = "block";
+            if(id === 'modal-approval') loadPendingMembers();
+        }
+        function closeModal(id) { document.getElementById(id).style.display = "none"; }
+        window.onclick = function(e) { if(e.target.classList.contains('modal')) e.target.style.display = "none"; }
+
+    </script>
+</body>
+</html>

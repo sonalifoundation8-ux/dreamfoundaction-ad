@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>মাদার ফান্ড লেজার - সোনালী ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- HTML2Canvas & PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        :root { --gold: #d4af37; --dark: #1a252f; --bg: #f4f7f6; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #000; }
+
+        .no-print-area { max-width: 600px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 12px; border-top: 5px solid var(--gold); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .date-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
+        .btn-search { width: 100%; padding: 12px; background: var(--dark); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+        /* ================= Report Styling ================= */
+        #report-wrapper { display: none; background: white; min-height: 100vh; padding: 10px; }
+        .report-container { max-width: 1100px; margin: auto; padding: 20px; background: white; border: 1px solid #ddd; }
+
+        .report-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .org-logo-box { display: flex; align-items: center; gap: 15px; }
+        .f-logo { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; }
+        .f-name h2 { font-size: 24px; color: var(--dark); font-weight: 800; }
+        .f-name p { font-size: 13px; color: #555; }
+        
+        .report-title-box { text-align: right; }
+        .report-title-box h1 { font-size: 26px; color: var(--gold); text-transform: uppercase; margin-bottom: 5px; }
+        .report-title-box p { font-weight: bold; font-size: 13px; color: #333; }
+
+        /* Table Design */
+        .ledger-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+        .ledger-table th, .ledger-table td { border: 1px solid #000; padding: 8px 5px; font-size: 12px; text-align: center; overflow: hidden; }
+        .ledger-table th { background: #f2f2f2; font-weight: bold; }
+        
+        .text-right { text-align: right !important; padding-right: 8px !important; }
+        .text-left { text-align: left !important; padding-left: 8px !important; }
+
+        .opening-row { background: #fffdf0; font-weight: bold; font-size: 13px; }
+        .total-footer { background: #f9f9f9; font-weight: bold; }
+
+        .btn-action-group { text-align: center; margin-top: 20px; padding-bottom: 40px; }
+        .btn-print { background: var(--gold); color: white; padding: 12px 25px; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; margin: 0 5px; }
+
+        @media (max-width: 600px) {
+            .report-header { flex-direction: column; text-align: center; }
+            .report-title-box { text-align: center; margin-top: 10px; }
+            .ledger-table { font-size: 10px; }
+            .ledger-table th, .ledger-table td { padding: 5px 2px; font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print-area" id="search-box">
+        <h3 style="text-align: center; margin-bottom: 20px; color: var(--gold); font-weight: 800;">মাদার ফান্ড স্টেটমেন্ট</h3>
+        <div class="grid-inputs">
+            <div><label>শুরুর তারিখ</label><input type="date" id="startDate" class="date-input"></div>
+            <div><label>শেষ তারিখ</label><input type="date" id="endDate" class="date-input"></div>
+        </div>
+        <button class="btn-search" onclick="generateMotherLedger()">স্টেটমেন্ট দেখুন</button>
+    </div>
+
+    <div id="loader" style="display:none; text-align:center; padding:20px;">
+        <i class="fa-solid fa-circle-notch fa-spin fa-2x" style="color:var(--gold);"></i>
+        <p>হিসাব গণনা করা হচ্ছে...</p>
+    </div>
+
+    <!-- ================= Main Report Content ================= -->
+    <div id="report-wrapper">
+        <div class="report-container" id="printArea">
+            <!-- Header -->
+            <div class="report-header">
+                <div class="org-logo-box">
+                    <img src="" id="fLogo" class="f-logo">
+                    <div class="f-name">
+                        <h2 id="fName">সংগঠনের নাম</h2>
+                        <p id="fAddress">ঠিকানা লোড হচ্ছে...</p>
+                    </div>
+                </div>
+                <div class="report-title-box">
+                    <h1>FUND STATEMENT</h1>
+                    <p id="periodRange"></p>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table class="ledger-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">SL#</th>
+                        <th style="width: 12%;">তারিখ</th>
+                        <th style="width: 15%;">ডেবিট (Debit)</th>
+                        <th style="width: 15%;">ক্রেডিট (Credit)</th>
+                        <th style="width: 18%;">ব্যালেন্স (Balance)</th>
+                        <th style="width: 35%;">বিবরণ (Remarks)</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody">
+                    <!-- Dynamic Data -->
+                </tbody>
+                <tfoot>
+                    <tr class="total-footer">
+                        <td colspan="2" class="text-right">সর্বমোট:</td>
+                        <td id="totalDebitSum" class="text-right">০.০০</td>
+                        <td id="totalCreditSum" class="text-right">০.০০</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div style="margin-top: 30px; font-size: 10px; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 10px;">
+                এটি একটি সিস্টেম জেনারেটেড মাদার একাউন্ট লেজার। প্রিন্ট সময়: <span id="printTime"></span>
+            </div>
+        </div>
+        
+        <div class="btn-action-group">
+            <button class="btn-print" onclick="downloadPDF()"><i class="fa-solid fa-file-pdf"></i> PDF ডাউনলোড</button>
+            <button class="btn-print" style="background:#666;" onclick="location.reload()">আবার সার্চ করুন</button>
+        </div>
+    </div>
+
+    <script>
+    // ১. ফায়ারবেস কনফিগারেশন
+    const firebaseConfig = {
+        apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+        authDomain: "sonali-fundation.firebaseapp.com",
+        projectId: "sonali-fundation",
+        storageBucket: "sonali-fundation.firebasestorage.app",
+        messagingSenderId: "167946300872",
+        appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+        measurementId: "G-34YFW23JR9"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // অ্যাপ তথ্য লোড (লোগো ও নাম)
+    db.collection('settings').doc('appInfo').get().then(doc => {
+        if(doc.exists) {
+            document.getElementById('fName').innerText = doc.data().orgName;
+            document.getElementById('fLogo').src = doc.data().logoUrl;
+            document.getElementById('fAddress').innerText = doc.data().address || "Bahubal, Habiganj, Bangladesh";
+        }
+    });
+
+    // ২. মেইন লেজার জেনারেশন ফাংশন
+    async function generateMotherLedger() {
+        const startInput = document.getElementById('startDate').value;
+        const endInput = document.getElementById('endDate').value;
+        if(!startInput || !endInput) return alert("দয়া করে শুরুর এবং শেষের তারিখ নির্বাচন করুন!");
+
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('search-box').style.display = 'none';
+
+        try {
+            // শুধুমাত্র fund_transactions থেকে ডাটা নেওয়া হবে ডবল এন্ট্রি এড়াতে
+            const fundSnap = await db.collection('fund_transactions').get();
+
+            let allItems = [];
+            fundSnap.forEach(doc => {
+                let d = doc.data();
+                
+                // --- তারিখ হ্যান্ডলিং (Timestamp বা String যাই হোক) ---
+                let finalTs = 0;
+                let displayDate = "";
+
+                if (d.timestamp && typeof d.timestamp.toDate === 'function') {
+                    finalTs = d.timestamp.toDate().getTime();
+                    displayDate = d.timestamp.toDate().toLocaleDateString('bn-BD');
+                } else if (d.date) {
+                    // যদি date ফিল্ডটি টাইমস্ট্যাম্প হয়
+                    if (typeof d.date.toDate === 'function') {
+                        finalTs = d.date.toDate().getTime();
+                        displayDate = d.date.toDate().toLocaleDateString('bn-BD');
+                    } else {
+                        // যদি date ফিল্ডটি টেক্সট (String) হয়
+                        finalTs = new Date(d.date).getTime();
+                        displayDate = d.date;
+                    }
+                }
+
+                // --- ব্যাংকিং লজিক ---
+                // deposit = Credit (+), withdraw = Debit (-)
+                allItems.push({
+                    ts: finalTs,
+                    date: displayDate,
+                    type: d.type === 'deposit' ? 'CREDIT' : 'DEBIT',
+                    amount: Number(d.amount || 0),
+                    remarks: d.source || 'সরাসরি লেনদেন'
+                });
+            });
+
+            // সময় অনুযায়ী সাজানো (Old to New)
+            allItems.sort((a, b) => a.ts - b.ts);
+
+            const filterS = new Date(startInput).setHours(0,0,0,0);
+            const filterE = new Date(endInput).setHours(23,59,59,999);
+
+            // ৩. ওপেনিং ব্যালেন্স হিসাব (সার্চ করা তারিখের আগের সব)
+            let openingBalance = 0;
+            allItems.filter(x => x.ts < filterS).forEach(x => {
+                if(x.type === 'CREDIT') openingBalance += x.amount; 
+                else openingBalance -= x.amount;
+            });
+
+            // ৪. টেবিল রো তৈরি
+            let currentBalance = openingBalance;
+            let totalD = 0, totalC = 0, sl = 1, match = false;
+            
+            // ওপেনিং ব্যালেন্স রো
+            let rowsHtml = `
+                <tr class="opening-row">
+                    <td colspan="4" class="text-right">Opening Balance :</td>
+                    <td class="text-right">৳ ${openingBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    <td></td>
+                </tr>`;
+
+            // লেনদেনের ডাটা প্রসেস
+            allItems.forEach(item => {
+                if(item.ts >= filterS && item.ts <= filterE) {
+                    match = true;
+                    if(item.type === 'CREDIT') {
+                        currentBalance += item.amount;
+                        totalC += item.amount;
+                    } else {
+                        currentBalance -= item.amount;
+                        totalD += item.amount;
+                    }
+
+                    rowsHtml += `
+                        <tr>
+                            <td>${sl++}</td>
+                            <td>${item.date}</td>
+                            <td class="text-right">${item.type==='DEBIT' ? '৳ '+item.amount.toLocaleString('en-IN', {minimumFractionDigits: 2}) : '0.00'}</td>
+                            <td class="text-right">${item.type==='CREDIT' ? '৳ '+item.amount.toLocaleString('en-IN', {minimumFractionDigits: 2}) : '0.00'}</td>
+                            <td class="text-right bal-cell">৳ ${currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td class="text-left">${item.remarks}</td>
+                        </tr>`;
+                }
+            });
+
+            if(!match && openingBalance === 0) {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('search-box').style.display = 'block';
+                return alert("এই সময়ের মধ্যে কোনো লেনদেন পাওয়া যায়নি!");
+            }
+
+            // UI আপডেট
+            document.getElementById('ledgerBody').innerHTML = rowsHtml;
+            document.getElementById('totalDebitSum').innerText = "৳ " + totalD.toLocaleString('en-IN', {minimumFractionDigits: 2});
+            document.getElementById('totalCreditSum').innerText = "৳ " + totalC.toLocaleString('en-IN', {minimumFractionDigits: 2});
+            document.getElementById('periodRange').innerText = `${startInput} থেকে ${endInput}`;
+            document.getElementById('printTime').innerText = new Date().toLocaleString('bn-BD');
+
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('report-wrapper').style.display = 'block';
+
+        } catch (error) {
+            console.error(error);
+            alert("Error: " + error.message);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('search-box').style.display = 'block';
+        }
+    }
+
+    function downloadPDF() {
+        const el = document.getElementById('printArea');
+        html2pdf().set({
+            margin: 5,
+            filename: 'Mother_Ledger.pdf',
+            image: { type: 'jpeg', quality: 1 },
+            html2canvas: { scale: 3, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        }).from(el).save();
+    }
+</script>
+</body>
+</html>

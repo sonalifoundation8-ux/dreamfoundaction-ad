@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>জমা রিকোয়েস্ট - অ্যাডমিন প্যানেল</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark: #2c3e50;
+            --light: #f4f6f9;
+            --green: #27ae60;
+            --red: #c0392b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--light); padding-bottom: 50px; }
+
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; cursor: pointer; text-decoration: none; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        .request-container { padding: 20px; max-width: 600px; margin: auto; }
+        
+        .req-card {
+            background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px;
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid var(--gold);
+        }
+
+        .req-info-box { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .req-img { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold); }
+        .req-details h4 { font-size: 15px; color: var(--dark); margin-bottom: 2px; }
+        .req-details p { font-size: 12px; color: #666; font-weight: 600; }
+        .req-amount { color: var(--green); font-weight: bold; font-size: 15px; margin-top: 2px; }
+
+        .action-btns { display: flex; align-items: center; gap: 8px; }
+        
+        .btn-detail {
+            background: #f1f2f6; color: var(--dark); border: none; padding: 8px 12px;
+            border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;
+        }
+
+        .icon-btn {
+            width: 38px; height: 38px; border-radius: 50%; border: none; color: white;
+            display: flex; justify-content: center; align-items: center; font-size: 16px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-approve { background: var(--green); }
+        .btn-reject { background: var(--red); }
+
+        /* Modal */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+        }
+        .modal-content {
+            background-color: #fff; margin: 10% auto; padding: 0; border-radius: 12px;
+            width: 90%; max-width: 450px; box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+            overflow: hidden; animation: slideUp 0.3s;
+        }
+        .modal-header { background: var(--dark); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .close-btn { color: white; font-size: 24px; cursor: pointer; }
+        
+        .modal-body { padding: 20px; }
+        .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+        .info-label { color: #666; font-weight: 600; }
+        .info-val { color: #222; font-weight: bold; text-align: right; }
+        .amount-highlight { font-size: 20px; color: var(--green); }
+
+        @keyframes slideUp { from {transform: translateY(30px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+
+        .loader { text-align: center; padding: 50px; color: var(--gold); }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <a href="dashboard.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="page-title">জমা রিকোয়েস্ট (পেন্ডিং)</div>
+    </div>
+
+    <div class="request-container" id="request-list">
+        <div class="loader"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><br>লোড হচ্ছে...</div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>জমার বিস্তারিত তথ্য</h3>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modal-body-content">
+                <!-- Data will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let pendingRequests = [];
+        let userPhotos = {};
+
+        // ১. পেন্ডিং জমা লোড করা
+        function loadDepositRequests() {
+            db.collection('deposits').where('status', '==', 'pending').onSnapshot(async (snapshot) => {
+                const listContainer = document.getElementById('request-list');
+                if(snapshot.empty) {
+                    listContainer.innerHTML = '<div style="text-align:center; margin-top:50px; color:#999;">কোনো নতুন জমা রিকোয়েস্ট নেই।</div>';
+                    return;
+                }
+
+                pendingRequests = [];
+                let html = '';
+
+                for(let doc of snapshot.docs) {
+                    let d = doc.data();
+                    d.docId = doc.id;
+                    pendingRequests.push(d);
+
+                    if (!userPhotos[d.uid]) {
+                        const uDoc = await db.collection('users').doc(d.uid).get();
+                        userPhotos[d.uid] = uDoc.exists ? uDoc.data().photoUrl : '';
+                    }
+
+                    html += `
+                        <div class="req-card">
+                            <div class="req-info-box">
+                                <img src="${userPhotos[d.uid] || 'https://i.ibb.co/Zzxz62P/user-placeholder.png'}" class="req-img">
+                                <div class="req-details">
+                                    <h4>${d.memberName}</h4>
+                                    <p>ID: ${d.memberId} | মাধ্যম: ${d.method}</p>
+                                    <div class="req-amount">৳ ${Number(d.amount).toFixed(2)}</div>
+                                </div>
+                            </div>
+                            <div class="action-btns">
+                                <button class="btn-detail" onclick="openDetails('${doc.id}')">বিস্তারিত</button>
+                                <button class="icon-btn btn-approve" onclick="approveDeposit('${doc.id}')"><i class="fa-solid fa-check"></i></button>
+                                <button class="icon-btn btn-reject" onclick="rejectDeposit('${doc.id}')"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                    `;
+                }
+                listContainer.innerHTML = html;
+            });
+        }
+
+        // ২. বিস্তারিত পপআপ
+        function openDetails(docId) {
+            const data = pendingRequests.find(req => req.docId === docId);
+            if(!data) return;
+
+            document.getElementById('modal-body-content').innerHTML = `
+                <div class="info-row"><span class="info-label">সদস্যের নাম:</span><span class="info-val">${data.memberName}</span></div>
+                <div class="info-row"><span class="info-label">সদস্য ID:</span><span class="info-val">${data.memberId}</span></div>
+                <div class="info-row"><span class="info-label">জমার মাধ্যম:</span><span class="info-val" style="color:var(--gold-dark);">${data.method}</span></div>
+                <div class="info-row"><span class="info-label">TrxID:</span><span class="info-val">${data.trxId || 'N/A'}</span></div>
+                <div class="info-row"><span class="info-label">তারিখ:</span><span class="info-val">${data.dateStr || data.date}</span></div>
+                <div class="info-row" style="border:none; margin-top:10px;">
+                    <span class="info-label">পরিমাণ:</span>
+                    <span class="info-val amount-highlight">৳ ${Number(data.amount).toFixed(2)}</span>
+                </div>
+            `;
+            document.getElementById('details-modal').style.display = 'block';
+        }
+
+        // ৩. অ্যাপ্রুভ লজিক (ফান্ড চেক ও ব্যাংকিং ট্রানজেকশন)
+        async function approveDeposit(docId) {
+            const data = pendingRequests.find(req => req.docId === docId);
+            if(!confirm(`আপনি কি ৳${data.amount} জমাটি অ্যাপ্রুভ করতে চান?`)) return;
+
+            const userRef = db.collection('users').doc(data.uid);
+            const fundRef = db.collection('settings').doc('fund');
+            const depositRef = db.collection('deposits').doc(docId);
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const uSnap = await transaction.get(userRef);
+                    const fSnap = await transaction.get(fundRef);
+
+                    if (!uSnap.exists) throw "সদস্য পাওয়া যায়নি!";
+                    
+                    const currentFund = fSnap.exists ? Number(fSnap.data().totalAmount || 0) : 0;
+                    const amount = Number(data.amount);
+
+                    // ১. ফান্ড চেক
+                    if (currentFund < amount) {
+                        throw `ফান্ডে পর্যাপ্ত টাকা নেই! বর্তমানে আছে: ৳${currentFund}`;
+                    }
+
+                    // ২. মাদার ফান্ড থেকে মাইনাস
+                    transaction.set(fundRef, { totalAmount: currentFund - amount }, { merge: true });
+
+                    // ৩. সদস্যের ব্যালেন্সে প্লাস
+                    const currentBalance = Number(uSnap.data().balance || 0);
+                    transaction.update(userRef, { balance: currentBalance + amount });
+
+                    // ৪. মাদার স্টেটমেন্ট এন্ট্রি ( fund_transactions )
+                    const fTxRef = db.collection('fund_transactions').doc();
+                    transaction.set(fTxRef, {
+                        amount: amount,
+                        type: 'withdraw', // ফান্ড থেকে আউট
+                        source: `সদস্য জমা অনুমোদন (${data.memberId})`,
+                        date: new Date().toISOString().split('T')[0],
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // ৫. সদস্যের সেভিংস স্টেটমেন্ট এন্ট্রি ( transactions )
+                    const uTxRef = db.collection('transactions').doc();
+                    transaction.set(uTxRef, {
+                        uid: data.uid,
+                        memberName: data.memberName,
+                        memberId: data.memberId,
+                        amount: amount,
+                        type: 'deposit',
+                        method: data.method,
+                        date: new Date().toLocaleDateString('bn-BD'),
+                        status: 'approved',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // ৬. রিকোয়েস্ট স্ট্যাটাস আপডেট
+                    transaction.update(depositRef, { status: 'approved', approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                });
+
+                alert("সফলভাবে অ্যাপ্রুভ হয়েছে এবং সব লেজার আপডেট হয়েছে।");
+            } catch (err) {
+                alert("ত্রুটি: " + err);
+            }
+        }
+
+        async function rejectDeposit(docId) {
+            if(!confirm("বাতিল করতে চান?")) return;
+            await db.collection('deposits').doc(docId).update({ status: 'rejected' });
+            alert("বাতিল করা হয়েছে।");
+        }
+
+        function closeModal() { document.getElementById('details-modal').style.display = 'none'; }
+        window.onclick = function(e) { if (e.target.classList.contains('modal')) closeModal(); }
+
+        loadDepositRequests();
+    </script>
+</body>
+</html>
