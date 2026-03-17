@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPS ম্যানেজমেন্ট</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --gold-dark: #b8860b;
+            --gold-gradient: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+            --dark: #1a252f;
+            --bg: #f4f7f6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: var(--bg); color: #333; padding-bottom: 50px; }
+
+        /* Header */
+        .page-header {
+            background: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 1000;
+        }
+        .back-btn { color: var(--dark); font-size: 20px; text-decoration: none; cursor: pointer; border:none; background:none; }
+        .page-title { font-size: 18px; font-weight: bold; color: var(--dark); }
+
+        /* ================= DPS Dashboard Stats ================= */
+        .dps-stats-container {
+            padding: 25px 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .stat-card {
+            background: var(--gold-gradient);
+            padding: 15px;
+            border-radius: 18px;
+            box-shadow: 0 10px 20px rgba(212, 175, 55, 0.3);
+            text-align: center;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .stat-name { font-size: 11px; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+        .stat-value { font-size: 16px; font-weight: 800; background: rgba(0,0,0,0.15); padding: 8px; border-radius: 12px; display: block; }
+
+        /* ================= Action Grid ================= */
+        .action-section {
+            padding: 20px;
+            max-width: 900px;
+            margin: auto;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* ডেস্কটপে ৪ কলাম */
+            gap: 12px;
+        }
+
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 18px 5px;
+            border-radius: 20px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255,255,255,0.5);
+            text-decoration: none;
+            color: var(--dark);
+            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .glass-btn:hover {
+            transform: translateY(-5px);
+            border-color: var(--gold);
+            background: white;
+        }
+
+        .icon-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            color: var(--gold-dark);
+            box-shadow: 0 4px 10px rgba(212, 175, 55, 0.2);
+        }
+
+        .btn-title { font-size: 11px; font-weight: 700; }
+
+        /* স্পেশাল বাটন স্টাইল */
+        .late-fee-btn { border: 1px solid #e74c3c; color: #e74c3c; }
+        .late-fee-btn .icon-circle { color: #e74c3c; }
+
+        @media (max-width: 600px) {
+            .dps-stats-container { grid-template-columns: 1fr 1fr; }
+            .dps-stats-container .stat-card:last-child { grid-column: span 2; }
+            .action-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="page-header">
+        <button onclick="window.history.back()" class="back-btn"><i class="fa-solid fa-arrow-left"></i></button>
+        <h2 class="page-title">DPS ড্যাশবোর্ড</h2>
+    </header>
+
+    <!-- DPS Stats -->
+    <div class="dps-stats-container">
+        <div class="stat-card">
+            <span class="stat-name">সদস্য সংখ্যা</span>
+            <span class="stat-value" id="dps-member-count">০ জন</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-name">মোট সঞ্চয়</span>
+            <span class="stat-value" id="dps-total-savings">৳ ০.০০</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-name">মোট বকেয়া</span>
+            <span class="stat-value" id="dps-total-due">৳ ০.০০</span>
+        </div>
+    </div>
+
+    <!-- Action Grid Section -->
+    <div class="action-section">
+        <div class="action-grid">
+            
+            <!-- ১. লাভ % সেটআপ -->
+            <a href="dps-settings.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-percent"></i></div>
+                <span class="btn-title">DPS লাভ %</span>
+            </a>
+
+            <!-- ২. বিলম্ব ফি সেটআপ (New Added) -->
+            <a href="dps-late-fee-settings.html" class="glass-btn late-fee-btn">
+                <div class="icon-circle"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                <span class="btn-title">বিলম্ব ফি</span>
+            </a>
+
+            <!-- ৩. DPS Approve -->
+            <a href="dps-approve.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-user-check"></i></div>
+                <span class="btn-title">Approve</span>
+            </a>
+
+            <!-- ৪. DPS Open -->
+            <a href="dps-open-admin.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-folder-plus"></i></div>
+                <span class="btn-title">DPS Open</span>
+            </a>
+
+            <!-- ৫. DPS সদস্য -->
+            <a href="dps-members.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-users"></i></div>
+                <span class="btn-title">সদস্য তালিকা</span>
+            </a>
+
+            <!-- ৬. DPS পরিশোধ -->
+            <a href="dps-pay.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                <span class="btn-title">কিস্তি জমা</span>
+            </a>
+			<!-- ৬. DPS পরিশোধ -->
+            <a href="admin-dps-payment-approval.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                <span class="btn-title"> জমা Aprov</span>
+            </a>
+
+            <!-- ৭. DPS ক্লোজ -->
+            <a href="dps-close.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-user-slash"></i></div>
+                <span class="btn-title">DPS ক্লোজ</span>
+            </a>
+
+            <!-- ৮. জমা তালিকা -->
+            <a href="dps-statements.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-list-ul"></i></div>
+                <span class="btn-title">স্টেটমেন্ট</span>
+            </a>
+			<!-- ৮. জমা তালিকা -->
+            <a href="found-pay.html" class="glass-btn">
+                <div class="icon-circle"><i class="fa-solid fa-list-ul"></i></div>
+                <span class="btn-title">ফান্ড জমা</span>
+            </a>
+
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd",
+            measurementId: "G-34YFW23JR9"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        function loadDpsDashboard() {
+            db.collection('dps_accounts').onSnapshot(snap => {
+                let memberCount = 0;
+                let totalDue = 0;
+                let totalSavings = 0;
+
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    if(data.status === 'active') {
+                        memberCount++;
+                        totalSavings += Number(data.totalPaid || 0);
+                        totalDue += Number(data.totalDue || 0);
+                    }
+                });
+
+                document.getElementById('dps-member-count').innerText = memberCount + " জন";
+                document.getElementById('dps-total-savings').innerText = "৳ " + totalSavings.toLocaleString('bn-BD');
+                document.getElementById('dps-total-due').innerText = "৳ " + totalDue.toLocaleString('bn-BD');
+            });
+        }
+
+        loadDpsDashboard();
+    </script>
+</body>
+</html>

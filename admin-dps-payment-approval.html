@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPS পেমেন্ট অ্যাপ্রুভাল - অ্যাডমিন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f0f2f5; color: #333; }
+        
+        .header { background: #1e272e; color: #d4af37; padding: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100; }
+        .container { padding: 20px; max-width: 600px; margin: auto; }
+        
+        /* Fund Display Card */
+        .fund-card { background: linear-gradient(135deg, #d4af37 0%, #b8961d 100%); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; box-shadow: 0 5px 15px rgba(212, 175, 55, 0.3); }
+        .fund-card p { font-size: 14px; opacity: 0.9; }
+        .fund-card h3 { font-size: 22px; margin-top: 5px; }
+
+        /* Payment Card List */
+        .payment-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #d4af37; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
+        .member-name { font-weight: bold; font-size: 16px; color: #1e272e; }
+        .dps-no { font-size: 12px; background: #fdf5e6; color: #b8961d; padding: 2px 8px; border-radius: 10px; border: 1px solid #d4af37; }
+        
+        .card-body p { font-size: 13px; margin-bottom: 5px; color: #666; }
+        .card-body b { color: #333; }
+        .amount-row { font-size: 18px; font-weight: bold; color: #27ae60; margin: 10px 0; }
+
+        /* Action Buttons */
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn-approve { background: #27ae60; color: white; }
+        .btn-approve:hover { background: #219150; }
+        .btn-reject { background: #e74c3c; color: white; }
+        .btn-reject:hover { background: #c0392b; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .loader { text-align: center; margin-top: 50px; color: #d4af37; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2><i class="fa-solid fa-money-bill-transfer"></i> DPS পেমেন্ট অ্যাপ্রুভাল</h2>
+    </div>
+
+    <div class="container">
+        <!-- অ্যাডমিন ফান্ড ডিসপ্লে -->
+        <div class="fund-card">
+            <p><i class="fa-solid fa-wallet"></i> অ্যাডমিন DPS ফান্ড ব্যালেন্স</p>
+            <h3>৳ <span id="admin-fund">লোড হচ্ছে...</span></h3>
+        </div>
+
+        <!-- পেন্ডিং পেমেন্ট লিস্ট -->
+        <div id="payment-list">
+            <div class="loader"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>ডাটা লোড হচ্ছে...</div>
+        </div>
+    </div>
+
+    <script>
+        // আপনার Firebase কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let adminFundBalance = 0;
+
+        // ১. ডাটাবেজ থেকে ফান্ড লোড করা (main_balance)
+        db.collection('dps_fund_info').doc('main_balance').onSnapshot(doc => {
+            if (doc.exists) {
+                adminFundBalance = Number(doc.data().balance) || 0;
+                document.getElementById('admin-fund').innerText = adminFundBalance.toLocaleString('en-IN', {minimumFractionDigits: 2});
+            } else {
+                document.getElementById('admin-fund').innerText = "0.00";
+            }
+        });
+
+        // ২. পেন্ডিং পেমেন্ট লিস্ট লোড করা
+        function loadPendingPayments() {
+            db.collection('dps_payments').where('status', '==', 'pending').onSnapshot(snap => {
+                const list = document.getElementById('payment-list');
+                list.innerHTML = '';
+
+                if (snap.empty) {
+                    list.innerHTML = '<p style="text-align:center; color:#999; margin-top:50px; font-weight:bold;">কোনো পেন্ডিং পেমেন্ট নেই।</p>';
+                    return;
+                }
+
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const paymentId = doc.id;
+                    const date = data.createdAt ? data.createdAt.split('T')[0] : 'N/A';
+
+                    const card = `
+                        <div class="payment-card">
+                            <div class="card-header">
+                                <span class="member-name">${data.memberName}</span>
+                                <span class="dps-no">${data.dpsNo}</span>
+                            </div>
+                            <div class="card-body">
+                                <p>মাধ্যম: <b>${data.method ? data.method.toUpperCase() : 'N/A'}</b> | TrxID: <b>${data.trxId || 'N/A'}</b></p>
+                                <p>তারিখ: <b>${date}</b></p>
+                                <p>কিস্তি: ৳${data.monthlyAmount} | বিলম্ব ফি: ৳${data.lateFee || 0} | অগ্রিম: ৳${data.advanceAmount || 0}</p>
+                                <div class="amount-row">মোট জমা: ৳${data.totalPaid}</div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-reject" onclick="rejectPayment('${paymentId}')"><i class="fa-solid fa-xmark"></i> রিজেক্ট</button>
+                                <button class="btn btn-approve" id="btn-${paymentId}" onclick="approvePayment('${paymentId}', ${JSON.stringify(data).replace(/"/g, '&quot;')})"><i class="fa-solid fa-check"></i> অ্যাপ্রুভ</button>
+                            </div>
+                        </div>
+                    `;
+                    list.innerHTML += card;
+                });
+            });
+        }
+
+        // ৩. পেমেন্ট অ্যাপ্রুভ করার মাস্টার লজিক
+        async function approvePayment(paymentId, data) {
+            if (adminFundBalance < data.totalPaid) {
+                alert("দুঃখিত! অ্যাডমিন ফান্ডে পর্যাপ্ত ব্যালেন্স নেই।");
+                return;
+            }
+
+            if (!confirm("আপনি কি এই DPS কিস্তি পেমেন্টটি অ্যাপ্রুভ করতে চান?")) return;
+
+            const btn = document.getElementById(`btn-${paymentId}`);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> প্রসেসিং...';
+
+            try {
+                // বাংলাদেশ সময় অনুযায়ী সঠিক YYYY-MM-DD ফরম্যাট তৈরি
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const localDateStr = `${year}-${month}-${day}`; 
+
+                const batch = db.batch();
+
+                // ১. পেমেন্ট স্ট্যাটাস আপডেট
+                const payRef = db.collection('dps_payments').doc(paymentId);
+                batch.update(payRef, { 
+                    status: 'approved', 
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp() 
+                });
+
+                // ২. সদস্যের DPS একাউন্ট আপডেট
+                const dpsRef = db.collection('dps_accounts').doc(data.dpsAccountId);
+                batch.update(dpsRef, {
+                    totalPaidAmount: firebase.firestore.FieldValue.increment(data.totalPaid),
+                    paidInstallments: firebase.firestore.FieldValue.increment(1)
+                });
+
+                // ৩. অ্যাডমিন ফান্ড (main_balance) ব্যালেন্স আপডেট
+                const fundRef = db.collection('dps_fund_info').doc('main_balance');
+                batch.update(fundRef, { 
+                    balance: firebase.firestore.FieldValue.increment(-data.totalPaid) 
+                });
+
+                // ৪. ফান্ড লেজার স্টেটমেন্টে রেকর্ড রাখা (এটি আপনার ফান্ড ম্যানেজমেন্টে দেখাবে)
+                const ledgerRef = db.collection('dps_fund_ledger').doc();
+                batch.set(ledgerRef, {
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    dateStr: localDateStr, // স্থানীয় সঠিক তারিখ
+                    amount: data.totalPaid,
+                    type: 'debit',
+                    note: `DPS পেমেন্ট অ্যাপ্রুভ: ${data.memberName} (${data.dpsNo})`,
+                    balanceAfter: adminFundBalance - data.totalPaid
+                });
+
+                // ৫. সদস্যের ব্যক্তিগত স্টেটমেন্ট
+                const stmtRef = db.collection('statements').doc();
+                batch.set(stmtRef, {
+                    uid: data.uid,
+                    title: "DPS কিস্তি জমা (Approved)",
+                    dpsNo: data.dpsNo,
+                    amount: data.totalPaid,
+                    type: 'credit',
+                    category: 'DPS',
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    note: `Approved by Admin (TrxID: ${data.trxId || 'N/A'})`
+                });
+
+                await batch.commit();
+                alert("সফলভাবে অ্যাপ্রুভ হয়েছে এবং স্টেটমেন্টে যুক্ত হয়েছে!");
+
+            } catch (error) {
+                console.error("অ্যাপ্রুভাল ত্রুটি:", error);
+                alert("কিছু একটা ভুল হয়েছে! আবার চেষ্টা করুন।");
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> অ্যাপ্রুভ';
+            }
+        }
+
+        // পেমেন্ট রিজেক্ট করার লজিক
+        async function rejectPayment(id) {
+            if (confirm("আপনি কি নিশ্চিতভাবে এই পেমেন্টটি রিজেক্ট করতে চান?")) {
+                try {
+                    await db.collection('dps_payments').doc(id).update({ 
+                        status: 'rejected',
+                        rejectedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("পেমেন্ট রিজেক্ট করা হয়েছে।");
+                } catch (error) {
+                    alert("রিজেক্ট করতে সমস্যা হয়েছে।");
+                }
+            }
+        }
+
+        loadPendingPayments();
+    </script>
+</body>
+</html>

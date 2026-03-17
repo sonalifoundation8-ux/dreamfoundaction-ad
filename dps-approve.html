@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPS অ্যাপ্রুভাল প্যানেল - অ্যাডমিন</title>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f4f6f9; display: flex; justify-content: center; }
+        
+        .admin-wrapper { width: 100%; max-width: 600px; background-color: #f4f6f9; min-height: 100vh; position: relative; padding-bottom: 50px; }
+
+        /* Header */
+        .top-bar { background: linear-gradient(135deg, #1e272e 0%, #2f3640 100%); color: white; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .top-bar h2 { font-size: 18px; font-weight: bold; color: #d4af37; }
+        
+        /* List Container */
+        .list-container { padding: 20px; }
+        .section-title { font-size: 15px; color: #555; margin-bottom: 15px; border-left: 4px solid #d4af37; padding-left: 10px; font-weight: bold; }
+
+        /* Pending Card */
+        .dps-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #f39c12; }
+        .dps-info h3 { font-size: 16px; color: #333; margin-bottom: 5px; }
+        .dps-info p { font-size: 12px; color: #666; margin-bottom: 3px; }
+        .dps-info .badge { background: #fdf5e6; color: #d4af37; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid #d4af37; }
+        .dps-amount { font-size: 16px; font-weight: bold; color: #27ae60; }
+        
+        .btn-details { background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .btn-details:hover { background: #2980b9; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        .hidden { display: none !important; }
+        .modal-content { background: #fff; width: 92%; max-width: 450px; border-radius: 12px; overflow: hidden; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .modal-header { background: #d4af37; color: white; padding: 15px; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .close-btn { cursor: pointer; font-size: 20px; }
+        
+        .modal-body { padding: 20px; max-height: 65vh; overflow-y: auto; }
+        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 13px; color: #444; }
+        .info-row span { font-weight: bold; color: #333; text-align: right; }
+        
+        .modal-footer { padding: 15px; display: flex; gap: 10px; background: #f9f9f9; border-top: 1px solid #eee; }
+        .btn-action { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; color: white; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        .btn-approve { background: #27ae60; }
+        .btn-approve:hover { background: #219150; }
+        .btn-reject { background: #e74c3c; }
+        .btn-reject:hover { background: #c0392b; }
+
+        .loader { text-align: center; padding: 20px; color: #d4af37; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-wrapper">
+        <!-- Header -->
+        <header class="top-bar">
+            <h2><i class="fa-solid fa-file-signature"></i> DPS অ্যাপ্রুভাল প্যানেল</h2>
+            <a href="admin-dashboard.html" style="color: white; text-decoration: none;"><i class="fa-solid fa-house"></i> ড্যাশবোর্ড</a>
+        </header>
+
+        <!-- Pending List Area -->
+        <div class="list-container">
+            <div class="section-title">পেন্ডিং আবেদন সমূহ</div>
+            
+            <div id="pending-list">
+                <div class="loader"><i class="fa-solid fa-spinner fa-spin"></i> ডাটা লোড হচ্ছে...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= Details & Action Modal ================= -->
+    <div id="dps-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span><i class="fa-solid fa-circle-info"></i> আবেদন বিস্তারিত</span>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            
+            <div class="modal-body" id="modal-details">
+                <!-- Data will be injected here via JS -->
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn-action btn-reject" onclick="rejectDps()"><i class="fa-solid fa-xmark"></i> রিজেক্ট করুন</button>
+                <button class="btn-action btn-approve" onclick="approveDps()"><i class="fa-solid fa-check"></i> অ্যাপ্রুভ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config (Replace with your actual config)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        const db = firebase.firestore();
+        let currentDpsId = null; // বর্তমানে কোন কার্ডটি ওপেন আছে তার ID
+
+        // পেজ লোড হলে পেন্ডিং লিস্ট আনা
+        document.addEventListener('DOMContentLoaded', loadPendingDPS);
+
+        function loadPendingDPS() {
+            // dps_accounts কালেকশন থেকে যেগুলোর status: 'pending' সেগুলো খুঁজবে
+            db.collection('dps_accounts').where('status', '==', 'pending').onSnapshot(async (snapshot) => {
+                const listDiv = document.getElementById('pending-list');
+                listDiv.innerHTML = ''; // পূর্বের ডাটা ক্লিয়ার
+
+                if(snapshot.empty) {
+                    listDiv.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">কোনো নতুন আবেদন নেই।</div>';
+                    return;
+                }
+
+                // প্রত্যেকটি ডকুমেন্টের জন্য লুপ
+                for(let docSnap of snapshot.docs) {
+                    let dpsData = docSnap.data();
+                    let dpsId = docSnap.id;
+
+                    // ইউজারের memberId আনার জন্য users কালেকশনে খোঁজা
+                    let memberId = "লোড হচ্ছে...";
+                    try {
+                        let userSnap = await db.collection('users').doc(dpsData.uid).get();
+                        if(userSnap.exists) {
+                            memberId = userSnap.data().memberId || "Pending ID";
+                        }
+                    } catch(err) { console.log(err); }
+
+                    // কার্ড তৈরি
+                    let cardHtml = `
+                        <div class="dps-card">
+                            <div class="dps-info">
+                                <h3>${dpsData.memberName}</h3>
+                                <p><span class="badge">ID: ${memberId}</span></p>
+                                <p>আবেদন: ${new Date(dpsData.openDate?.seconds * 1000).toLocaleDateString('en-GB') || 'আজ'}</p>
+                                <p style="margin-top:5px;">মাসিক জমা: <span class="dps-amount">${dpsData.monthlyAmount} ৳</span></p>
+                            </div>
+                            <div>
+                                <button class="btn-details" onclick='openDetailsModal(${JSON.stringify(dpsData)}, "${dpsId}", "${memberId}")'>বিস্তারিত</button>
+                            </div>
+                        </div>
+                    `;
+                    listDiv.innerHTML += cardHtml;
+                }
+            });
+        }
+
+        // বিস্তারিত বাটন ক্লিক করলে Modal ওপেন হবে
+        function openDetailsModal(dps, dpsId, memberId) {
+            currentDpsId = dpsId; // গ্লোবাল ভেরিয়েবলে ID সেভ করে রাখা
+            const modalBody = document.getElementById('modal-details');
+            
+            // ডেট ফরম্যাট
+            let applyDate = dps.openDate ? new Date(dps.openDate.seconds * 1000).toLocaleDateString('en-GB') : '---';
+            let matDate = new Date(dps.maturityDate).toLocaleDateString('en-GB');
+
+            // Modal এর ভেতরের ডিজাইন
+            modalBody.innerHTML = `
+                <div class="info-row"><p>সদস্যের নাম</p> <span>${dps.memberName}</span></div>
+                <div class="info-row"><p>সদস্য আইডি</p> <span style="color:#d4af37;">${memberId}</span></div>
+                <div class="info-row"><p>আবেদনের তারিখ</p> <span>${applyDate}</span></div>
+                <div class="info-row"><p>মেয়াদ</p> <span>${dps.years} বছর</span></div>
+                <div class="info-row"><p>লভ্যাংশ হার</p> <span>${dps.profitRate}%</span></div>
+                <div class="info-row"><p>মাসিক জমা</p> <span style="color:#27ae60; font-size:15px;">${dps.monthlyAmount} ৳</span></div>
+                <div class="info-row"><p>মোট আসল জমা হবে</p> <span>${dps.totalDeposit} ৳</span></div>
+                <div class="info-row"><p>মোট লাভ আসবে</p> <span>${dps.totalProfit.toFixed(2)} ৳</span></div>
+                <div class="info-row" style="background: #fdf5e6; padding: 10px; border-radius: 5px; margin-top: 5px;">
+                    <p style="font-weight:bold;">সর্বমোট (মেয়াদ শেষে)</p> 
+                    <span style="color:#d4af37; font-size:16px;">${dps.maturityAmount.toFixed(2)} ৳</span>
+                </div>
+                <div class="info-row"><p>মেয়াদ উত্তীর্ণের তারিখ</p> <span>${matDate}</span></div>
+            `;
+            
+            document.getElementById('dps-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('dps-modal').classList.add('hidden');
+            currentDpsId = null;
+        }
+
+        // ================= APPROVE LOGIC (Transaction) =================
+        async function approveDps() {
+            if(!currentDpsId) return;
+            if(!confirm("আপনি কি এই আবেদনটি অ্যাপ্রুভ করতে চান?")) return;
+
+            const btnApprove = document.querySelector('.btn-approve');
+            btnApprove.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> হচ্ছে...';
+            btnApprove.disabled = true;
+
+            const counterRef = db.collection('settings').doc('dpsCounter');
+            const dpsRef = db.collection('dps_accounts').doc(currentDpsId);
+
+            try {
+                // Firebase Transaction ব্যবহার করা হলো যাতে ডুপ্লিকেট সিরিয়াল তৈরি না হয়
+                await db.runTransaction(async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef);
+                    let newSerial = 1;
+
+                    // ডাটাবেজে যদি আগে থেকে কাউন্টার থাকে
+                    if (counterDoc.exists && counterDoc.data().lastSerial) {
+                        newSerial = counterDoc.data().lastSerial + 1;
+                    }
+
+                    // সিরিয়াল অনুযায়ী নম্বর বানানো (যেমন: 1 হলে 001, 15 হলে 015)
+                    let formattedNo = "DPS-NO:" + String(newSerial).padStart(3, '0');
+
+                    // ১. DPS একাউন্ট আপডেট করা (Approve)
+                    transaction.update(dpsRef, {
+                        status: 'active',
+                        dpsNo: formattedNo,
+                        approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // ২. কাউন্টার আপডেট করা (যাতে পরের জন নতুন সিরিয়াল পায়)
+                    transaction.set(counterRef, { lastSerial: newSerial }, { merge: true });
+                });
+
+                alert("আবেদনটি সফলভাবে অ্যাপ্রুভ হয়েছে এবং নতুন DPS নম্বর তৈরি হয়েছে!");
+                closeModal();
+
+            } catch (error) {
+                console.error(error);
+                alert("সমস্যা হয়েছে! আবার চেষ্টা করুন।");
+            } finally {
+                btnApprove.innerHTML = '<i class="fa-solid fa-check"></i> অ্যাপ্রুভ করুন';
+                btnApprove.disabled = false;
+            }
+        }
+
+        // ================= REJECT LOGIC =================
+        async function rejectDps() {
+            if(!currentDpsId) return;
+            if(!confirm("আপনি কি নিশ্চিতভাবে এই আবেদনটি রিজেক্ট করতে চান?")) return;
+
+            try {
+                await db.collection('dps_accounts').doc(currentDpsId).update({
+                    status: 'rejected',
+                    rejectedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert("আবেদনটি রিজেক্ট করা হয়েছে।");
+                closeModal();
+            } catch (error) {
+                alert("সমস্যা হয়েছে! আবার চেষ্টা করুন।");
+            }
+        }
+    </script>
+</body>
+</html>

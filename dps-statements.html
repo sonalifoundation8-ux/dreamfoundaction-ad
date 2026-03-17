@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্য DPS স্টেটমেন্ট - অ্যাডমিন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- html2canvas for PNG Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f4f6f9; color: #333; }
+        
+        .header { background: #1e272e; color: #d4af37; padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; }
+        .container { padding: 15px; max-width: 480px; margin: auto; }
+
+        /* Search Section */
+        .search-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; border-bottom: 3px solid #d4af37; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .search-row { display: flex; gap: 8px; }
+        .form-control { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
+        .btn-gold { background: #d4af37; color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer; }
+
+        /* Summary Cards */
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .s-card { background: white; padding: 12px 5px; border-radius: 10px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 3px solid #d4af37; }
+        .s-card p { font-size: 9px; color: #777; font-weight: bold; text-transform: uppercase; }
+        .s-card h4 { font-size: 12px; color: #1e272e; margin-top: 5px; }
+
+        /* Statement Card List */
+        .statement-area { background: white; padding: 15px; border-radius: 15px; min-height: 200px; }
+        .month-card { background: #f9f9f9; border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ccc; }
+        .paid { border-left-color: #27ae60; background: #f1f9f4; }
+        .due { border-left-color: #e74c3c; background: #fff5f5; }
+        .future { border-left-color: #bdc3c7; opacity: 0.7; }
+
+        .info h3 { font-size: 13px; color: #333; }
+        .info p { font-size: 10px; color: #777; }
+        .status-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; color: white; }
+        .bg-paid { background: #27ae60; }
+        .bg-due { background: #e74c3c; }
+        .bg-future { background: #95a5a6; }
+
+        .btn-download { width: 100%; padding: 15px; background: #27ae60; color: white; border: none; border-radius: 10px; font-weight: bold; margin-top: 20px; cursor: pointer; display: none; }
+        
+        .year-header { font-size: 13px; font-weight: bold; color: #d4af37; margin: 15px 0 10px 5px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .loader { text-align: center; padding: 40px; color: #d4af37; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h2>সদস্য DPS স্টেটমেন্ট</h2>
+    </header>
+
+    <div class="container">
+        <!-- ১. সার্চ সেকশন -->
+        <div class="search-card">
+            <div class="form-group">
+                <label>সদস্য আইডি দিয়ে খুঁজুন</label>
+                <div class="search-row">
+                    <input type="text" id="member-search" class="form-control" placeholder="যেমন: SF-001">
+                    <button class="btn-gold" onclick="findMember()"><i class="fa-solid fa-search"></i></button>
+                </div>
+            </div>
+            <div class="form-group" id="dps-select-box" style="display:none;">
+                <label>DPS নম্বর নির্বাচন করুন</label>
+                <select id="dps-no-select" class="form-control" onchange="loadStatement()">
+                    <option value="" disabled selected>নির্বাচন করুন</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="statement-content" style="display:none;">
+            <!-- ২. সামারি গ্রিড -->
+            <div class="summary-grid">
+                <div class="s-card"><p>মোট জমা</p><h4 id="sum-paid">৳ 0</h4></div>
+                <div class="s-card"><p>মোট বাকি</p><h4 id="sum-due" style="color: #e74c3c;">৳ 0</h4></div>
+                <div class="s-card"><p>বাকি মাস</p><h4 id="sum-months">0 মাস</h4></div>
+            </div>
+
+            <!-- ৩. স্টেটমেন্ট লিস্ট এরিয়া (এটি PNG ডাউনলোড হবে) -->
+            <div class="statement-area" id="capture-area">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h3 style="color: #d4af37; font-size: 16px;">ড্রিম ফাউন্ডেশন</h3>
+                    <p style="font-size: 11px; color: #666;">DPS কিস্তি স্টেটমেন্ট: <b id="display-dpsno"></b></p>
+                    <p style="font-size: 10px; color: #888;" id="display-member">সদস্য: ---</p>
+                </div>
+                <div id="statement-list"></div>
+            </div>
+
+            <button class="btn-download" id="dl-btn" onclick="downloadPNG()"><i class="fa-solid fa-image"></i> স্টেটমেন্ট ইমেজ ডাউনলোড করুন</button>
+        </div>
+
+        <div id="initial-msg" style="text-align:center; color:#999; margin-top:50px;">
+            <i class="fa-solid fa-file-invoice-dollar fa-3x"></i>
+            <p style="margin-top:10px;">স্টেটমেন্ট দেখতে সদস্য আইডি সার্চ করুন</p>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentUid = null;
+        let memberName = "";
+        let dpsAccounts = [];
+
+        // সদস্য খুঁজে বের করা
+        async function findMember() {
+            const mId = document.getElementById('member-search').value.trim();
+            if(!mId) return;
+
+            const snap = await db.collection('users').where('memberId', '==', mId).get();
+            if(snap.empty) { alert("সদস্য পাওয়া যায়নি!"); return; }
+
+            const user = snap.docs[0].data();
+            currentUid = snap.docs[0].id;
+            memberName = user.fullName;
+
+            // ঐ সদস্যের সব DPS আনা
+            const dpsSnap = await db.collection('dps_accounts').where('uid', '==', currentUid).get();
+            const select = document.getElementById('dps-no-select');
+            select.innerHTML = '<option value="" disabled selected>নির্বাচন করুন</option>';
+            dpsAccounts = [];
+
+            if(dpsSnap.empty) { alert("এই সদস্যের কোনো DPS একাউন্ট নেই!"); return; }
+
+            dpsSnap.forEach(doc => {
+                dpsAccounts.push({ id: doc.id, ...doc.data() });
+                select.innerHTML += `<option value="${doc.id}">${doc.data().dpsNo || 'পেন্ডিং'}</option>`;
+            });
+
+            document.getElementById('dps-select-box').style.display = 'block';
+            document.getElementById('initial-msg').style.display = 'none';
+        }
+
+        // স্টেটমেন্ট জেনারেট করা
+        async function loadStatement() {
+            const dpsId = document.getElementById('dps-no-select').value;
+            const dps = dpsAccounts.find(a => a.id === dpsId);
+            const listDiv = document.getElementById('statement-list');
+            
+            document.getElementById('statement-content').style.display = 'block';
+            document.getElementById('dl-btn').style.display = 'block';
+            listDiv.innerHTML = '<div class="loader"><i class="fa-solid fa-spinner fa-spin"></i> প্রসেসিং...</div>';
+
+            // ১. সামারি হিসাব
+            const totalMonths = dps.years * 12;
+            const paidCount = dps.paidInstallments || 0;
+            const monthly = dps.monthlyAmount;
+            const openDate = dps.openDate ? new Date(dps.openDate.seconds * 1000) : new Date();
+            const today = new Date();
+
+            // কত মাস পার হয়েছে
+            const elapsed = (today.getFullYear() - openDate.getFullYear()) * 12 + (today.getMonth() - openDate.getMonth()) + 1;
+            const dueMonths = Math.max(0, elapsed - paidCount);
+
+            document.getElementById('sum-paid').innerText = `৳ ${dps.totalPaidAmount || 0}`;
+            document.getElementById('sum-due').innerText = `৳ ${dueMonths * monthly}`;
+            document.getElementById('sum-months').innerText = `${dueMonths} মাস`;
+            document.getElementById('display-dpsno').innerText = dps.dpsNo;
+            document.getElementById('display-member').innerText = `সদস্য: ${memberName}`;
+
+            // ২. স্টেটমেন্ট লিস্ট তৈরি
+            let html = "";
+            let curYear = 0;
+
+            for (let i = 1; i <= totalMonths; i++) {
+                let instDate = new Date(openDate.getFullYear(), openDate.getMonth() + (i - 1), 1);
+                let year = instDate.getFullYear();
+                let monthName = instDate.toLocaleString('bn-BD', { month: 'long' });
+
+                if (year !== curYear) {
+                    curYear = year;
+                    html += `<div class="year-header">${curYear} সাল</div>`;
+                }
+
+                let status = "", badge = "", cardClass = "";
+                if (i <= paidCount) {
+                    status = "Paid", badge = "bg-paid", cardClass = "paid";
+                } else if (instDate <= today) {
+                    status = "Due", badge = "bg-due", cardClass = "due";
+                } else {
+                    status = "Upcoming", badge = "bg-future", cardClass = "future";
+                }
+
+                html += `
+                    <div class="month-card ${cardClass}">
+                        <div class="info">
+                            <h3>${monthName}</h3>
+                            <p>কিস্তি নং: ${i} | পরিমাণ: ৳${monthly}</p>
+                        </div>
+                        <div class="status-badge ${badge}">${status}</div>
+                    </div>
+                `;
+            }
+            listDiv.innerHTML = html;
+        }
+
+        // ৩. PNG ডাউনলোড
+        function downloadPNG() {
+            const area = document.getElementById('capture-area');
+            const dpsNo = document.getElementById('display-dpsno').innerText;
+            
+            html2canvas(area, { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Statement_${dpsNo}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+            });
+        }
+    </script>
+</body>
+</html>

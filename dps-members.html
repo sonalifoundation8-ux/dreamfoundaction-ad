@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPS সদস্য তালিকা - ড্রিম ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- html2canvas for PNG Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f1f3f6; color: #333; padding-bottom: 50px; }
+        
+        .header { background: #1e272e; color: #d4af37; padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .container { padding: 15px; max-width: 500px; margin: auto; }
+
+        /* Search Box */
+        .search-container { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; gap: 10px; border: 1px solid #d4af37; }
+        .search-input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; }
+        .btn-search { background: #d4af37; color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        .btn-search:hover { background: #b8961d; }
+
+        /* Card List Style */
+        .member-card { background: #e0e0e0; border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; border: 1px solid #ccc; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .status-badge { position: absolute; top: 15px; right: 20px; color: #27ae60; font-weight: bold; font-size: 13px; }
+        .dps-no-badge { background: #dcd3c9; color: #8a7a6a; padding: 2px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 10px; border: 1px solid #bba; }
+        
+        .member-name { font-size: 18px; font-weight: bold; color: #2c3e50; text-transform: uppercase; }
+        .member-id-text { font-size: 13px; color: #666; margin-bottom: 15px; }
+
+        .card-stats { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .stat-box p { font-size: 12px; color: #777; font-weight: bold; }
+        .stat-box h4 { font-size: 16px; margin-top: 3px; }
+        .text-green { color: #27ae60; }
+        .text-red { color: #e74c3c; }
+
+        .btn-view { width: 100%; background: #1e272e; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+
+        /* Modal View */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: #d9d9d9; width: 92%; max-width: 450px; border-radius: 12px; overflow: hidden; }
+        .modal-header { background: #1e272e; color: #d4af37; padding: 15px; text-align: center; font-size: 16px; font-weight: bold; }
+        .modal-body { padding: 15px; }
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table tr { border-bottom: 1px solid #bbb; }
+        .info-table td { padding: 10px 5px; font-size: 14px; color: #444; }
+        .info-table td:last-child { text-align: right; font-weight: bold; color: #222; }
+        .highlight-box { border: 1px solid #bbb; border-radius: 10px; padding: 15px; margin-top: 15px; }
+        .row-total { display: flex; justify-content: space-between; padding: 5px 0; }
+        .mat-total { color: #b8961d; font-size: 18px; font-weight: bold; }
+
+        .modal-footer { padding: 15px; text-align: center; display: flex; gap: 10px; }
+        .btn-close { flex: 1; background: none; border: none; color: #555; font-weight: bold; cursor: pointer; }
+        .btn-download { flex: 1; background: #27ae60; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+        .loader { text-align: center; padding: 50px; color: #d4af37; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h2>DPS সদস্য তালিকা</h2>
+    </header>
+
+    <div class="container">
+        <!-- ১. সার্চ অপশন -->
+        <div class="search-container">
+            <input type="text" id="search-input" class="search-input" placeholder="সদস্য আইডি দিয়ে খুঁজুন (যেমন: SF-002)">
+            <button class="btn-search" onclick="searchByMemberId()"><i class="fa-solid fa-magnifying-glass"></i></button>
+            <button class="btn-search" style="background: #34495e;" onclick="loadDpsMembers()"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+
+        <!-- তালিকা -->
+        <div id="member-list">
+            <div class="loader"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>ডাটা লোড হচ্ছে...</div>
+        </div>
+    </div>
+
+    <!-- বিস্তারিত মোডাল -->
+    <div id="details-modal" class="modal-overlay">
+        <div class="modal-content" id="capture-area">
+            <div class="modal-header">DPS একাউন্ট বিস্তারিত</div>
+            <div class="modal-body">
+                <table class="info-table">
+                    <tr><td>সদস্যের নাম:</td> <td id="det-name">---</td></tr>
+                    <tr><td>সদস্য আইডি:</td> <td id="det-id">---</td></tr>
+                    <tr><td>DPS নাম্বার:</td> <td id="det-dpsno" style="color:#2980b9;">---</td></tr>
+                    <tr><td>মাসিক কিস্তি:</td> <td>৳ <span id="det-monthly">0</span></td></tr>
+                    <tr><td>ওপেনিং তারিখ:</td> <td id="det-open">---</td></tr>
+                    <tr><td>মেয়াদকাল:</td> <td id="det-years">---</td></tr>
+                    <tr><td>শেষ হওয়ার তারিখ:</td> <td id="det-end" style="color: #e74c3c;">---</td></tr>
+                </table>
+
+                <div class="highlight-box">
+                    <div class="row-total"><span>মোট জমা (আসল):</span> <b>৳ <span id="det-paid">0</span></b></div>
+                    <div class="row-total"><span>মোট লাভ:</span> <b>৳ <span id="det-profit">0</span></b></div>
+                    <div class="row-total" style="margin-top:10px; border-top: 1px solid #ccc; padding-top: 10px;">
+                        <span style="font-weight: bold;">মেয়াদ শেষে মোট পাবে:</span>
+                        <span class="mat-total">৳ <span id="det-mat">0</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-close" onclick="closeModal()">বন্ধ করুন</button>
+                <button class="btn-download" onclick="downloadPNG()"><i class="fa-solid fa-image"></i> PNG ডাউনলোড</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config (Replace with actual)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ১. ডিফল্ট লোড (সব ডাটা এনে ব্রাউজারে সর্ট করা)
+        async function loadDpsMembers() {
+            const listDiv = document.getElementById('member-list');
+            listDiv.innerHTML = '<div class="loader"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
+            document.getElementById('search-input').value = "";
+
+            try {
+                const snapshot = await db.collection('dps_accounts').get();
+                
+                // জাভাস্ক্রিপ্ট দিয়ে dpsNo অনুযায়ী সাজানো (001, 002...)
+                let sortedDocs = snapshot.docs.sort((a, b) => {
+                    return (a.data().dpsNo || "").localeCompare(b.data().dpsNo || "");
+                });
+
+                renderCards(sortedDocs);
+            } catch (e) {
+                listDiv.innerHTML = '<p style="text-align:center; color:red;">ডাটা লোড করতে সমস্যা হয়েছে।</p>';
+            }
+        }
+
+        // ২. আইডি দিয়ে সার্চ করার ফাংশন (ইনডেক্স এরর হবে না)
+        async function searchByMemberId() {
+            const input = document.getElementById('search-input').value.trim();
+            if(!input) { alert("আইডি লিখুন!"); return; }
+
+            const listDiv = document.getElementById('member-list');
+            listDiv.innerHTML = '<div class="loader">খুঁজছি...</div>';
+
+            try {
+                // প্রথমে ইউজার আইডি (UID) খুঁজে বের করা
+                const userSnap = await db.collection('users').where('memberId', '==', input).get();
+                
+                if(userSnap.empty) {
+                    listDiv.innerHTML = '<p style="text-align:center; padding:20px; color:red;">দুঃখিত! এই আইডি দিয়ে কোনো সদস্য পাওয়া যায়নি।</p>';
+                    return;
+                }
+
+                const uid = userSnap.docs[0].id;
+                const mId = userSnap.docs[0].data().memberId;
+
+                // ওই UID এর অধীনে সব DPS নিয়ে আসা
+                const dpsSnap = await db.collection('dps_accounts').where('uid', '==', uid).get();
+                
+                if(dpsSnap.empty) {
+                    listDiv.innerHTML = `<p style="text-align:center; padding:20px;">সদস্য পাওয়া গেছে (${mId}), কিন্তু তার কোনো DPS একাউন্ট নেই।</p>`;
+                } else {
+                    // জাভাস্ক্রিপ্ট দিয়ে সাজানো (যাতে ইনডেক্স এরর না আসে)
+                    let sortedDocs = dpsSnap.docs.sort((a, b) => {
+                        return (a.data().dpsNo || "").localeCompare(b.data().dpsNo || "");
+                    });
+                    
+                    renderCards(sortedDocs, mId);
+                }
+
+            } catch (e) {
+                console.error(e);
+                listDiv.innerHTML = '<p style="text-align:center; color:red;">সার্চ করার সময় সমস্যা হয়েছে।</p>';
+            }
+        }
+
+        // ৩. কার্ড রেন্ডার করার ফাংশন
+        async function renderCards(docs, forcedMemberId = null) {
+            const listDiv = document.getElementById('member-list');
+            listDiv.innerHTML = '';
+
+            for(let doc of docs) {
+                const data = doc.data();
+                let mId = forcedMemberId;
+                
+                if(!mId) {
+                    const userDoc = await db.collection('users').doc(data.uid).get();
+                    mId = userDoc.exists ? userDoc.data().memberId : "N/A";
+                }
+
+                const totalDue = (data.totalDeposit || 0) - (data.totalPaidAmount || 0);
+
+                const card = `
+                    <div class="member-card">
+                        <span class="status-badge">${data.status === 'active' ? 'Active' : 'Pending'}</span>
+                        <div class="dps-no-badge">${data.dpsNo || 'N/A'}</div>
+                        <h3 class="member-name">${data.memberName}</h3>
+                        <p class="member-id-text">আইডি: ${mId}</p>
+                        
+                        <div class="card-stats">
+                            <div class="stat-box">
+                                <p>মোট জমা</p>
+                                <h4 class="text-green">৳ ${data.totalPaidAmount || 0}</h4>
+                            </div>
+                            <div class="stat-box" style="text-align: right;">
+                                <p>মোট বাকি</p>
+                                <h4 class="text-red">৳ ${totalDue}</h4>
+                            </div>
+                        </div>
+                        
+                        <button class="btn-view" onclick='showDetails(${JSON.stringify(data)}, "${mId}")'>বিস্তারিত তথ্য দেখুন</button>
+                    </div>
+                `;
+                listDiv.innerHTML += card;
+            }
+        }
+
+        function showDetails(data, mId) {
+            document.getElementById('det-name').innerText = data.memberName;
+            document.getElementById('det-id').innerText = mId;
+            document.getElementById('det-dpsno').innerText = data.dpsNo || 'N/A';
+            document.getElementById('det-monthly').innerText = data.monthlyAmount;
+            
+            const openDate = data.openDate ? new Date(data.openDate.seconds * 1000).toLocaleDateString('bn-BD') : '---';
+            const endDate = data.maturityDate ? new Date(data.maturityDate).toLocaleDateString('bn-BD', {year:'numeric', month:'long', day:'numeric'}) : '---';
+
+            document.getElementById('det-open').innerText = openDate;
+            document.getElementById('det-years').innerText = data.years + " বছর";
+            document.getElementById('det-end').innerText = endDate;
+            document.getElementById('det-paid').innerText = data.totalDeposit; 
+            document.getElementById('det-profit').innerText = data.totalProfit.toFixed(2);
+            document.getElementById('det-mat').innerText = data.maturityAmount.toFixed(2);
+
+            document.getElementById('details-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('details-modal').style.display = 'none';
+        }
+
+        function downloadPNG() {
+            const area = document.getElementById('capture-area');
+            const footer = document.querySelector('.modal-footer');
+            footer.style.display = 'none'; 
+
+            html2canvas(area).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'DPS_Details_' + document.getElementById('det-dpsno').innerText + '.png';
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                footer.style.display = 'flex';
+            });
+        }
+
+        loadDpsMembers();
+    </script>
+</body>
+</html>

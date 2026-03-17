@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অ্যাডমিন DPS কালেকশন - ড্রিম ফাউন্ডেশন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f4f6f9; color: #333; }
+        .header { background: #1e272e; color: #d4af37; padding: 20px; text-align: center; }
+        .container { padding: 20px; max-width: 500px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-bottom: 3px solid #d4af37; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; background: #f9f9f9; }
+        .search-group { display: flex; gap: 10px; }
+        .btn-gold { background: #d4af37; color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .total-box { background: linear-gradient(135deg, #d4af37 0%, #b8961d 100%); padding: 15px; border-radius: 10px; text-align: center; color: white; margin-top: 10px; }
+        .btn-submit { width: 100%; padding: 15px; background: #27ae60; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .slip-card { background: white; width: 95%; max-width: 400px; border-radius: 10px; overflow: hidden; }
+        .slip-header { background: #fdf5e6; padding: 20px; text-align: center; border-bottom: 2px dashed #d4af37; }
+        .slip-body { padding: 20px; font-size: 13px; }
+        .slip-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
+        .btn-dl { flex: 1; padding: 10px; background: #2980b9; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>DPS কিস্তি জমা (অ্যাডমিন)</h2>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <div class="form-group">
+                <label>সদস্য আইডি দিয়ে খুঁজুন</label>
+                <div class="search-group">
+                    <input type="text" id="search-id" class="form-control" placeholder="যেমন: SF-001">
+                    <button class="btn-gold" onclick="searchMember()"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+            <div id="member-display" style="display:none; padding:10px; background:#fdf5e6; border-radius:8px; border:1px dashed #d4af37;">
+                <h4 id="m-name">সদস্যের নাম</h4>
+                <p id="m-phone" style="font-size:12px; color:#666;"></p>
+                <input type="hidden" id="m-uid">
+            </div>
+        </div>
+
+        <div class="card" id="payment-form" style="display:none;">
+            <div class="form-group">
+                <label>DPS নম্বর সিলেক্ট করুন</label>
+                <select id="dps-select" class="form-control" onchange="updateInstallment()"></select>
+            </div>
+            <div class="form-group"><label>কিস্তির পরিমাণ (৳)</label><input type="number" id="pay-monthly" class="form-control" oninput="calculateTotal()"></div>
+            <div class="form-group"><label>বিলম্ব ফি</label><input type="number" id="pay-late" class="form-control" value="0" oninput="calculateTotal()"></div>
+            <div class="form-group"><label>অগ্রিম জমা</label><input type="number" id="pay-adv" class="form-control" value="0" oninput="calculateTotal()"></div>
+            <div class="total-box"><p>সর্বমোট জমা</p><h2 id="total-display">৳ ০.০০</h2></div>
+            <div class="form-group" style="margin-top:15px;"><label>পেমেন্ট মাধ্যম</label>
+                <select id="pay-method" class="form-control">
+                    <option value="Cash">Cash (অফিস)</option><option value="bKash">bKash</option><option value="Nagad">Nagad</option>
+                </select>
+            </div>
+            <button class="btn-submit" id="submit-btn" onclick="processDeposit()">জমা নিশ্চিত করুন</button>
+        </div>
+    </div>
+
+    <div id="slip-modal" class="modal-overlay">
+        <div class="slip-card" id="slip-to-png">
+            <div class="slip-header"><h2>ড্রিম ফাউন্ডেশন</h2><p>DPS পেমেন্ট স্লিপ</p></div>
+            <div class="slip-body">
+                <div class="slip-row"><p>সদস্য:</p> <b id="s-name"></b></div>
+                <div class="slip-row"><p>DPS নং:</p> <b id="s-dpsno"></b></div>
+                <div class="slip-row"><p>তারিখ:</p> <b id="s-date"></b></div>
+                <div class="slip-row" style="margin-top:10px; border-top:2px solid #ddd;"><p>মোট জমা:</p> <b style="color:#27ae60; font-size:18px;">৳ <span id="s-total"></span></b></div>
+            </div>
+            <div class="slip-footer">
+                <button class="btn-dl" onclick="downloadPNG()">PNG ডাউনলোড</button>
+                <button class="btn-dl" style="background:#e74c3c;" onclick="location.reload()">বন্ধ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = { apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo", authDomain: "sonali-fundation.firebaseapp.com", projectId: "sonali-fundation", storageBucket: "sonali-fundation.firebasestorage.app" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let activeDpsList = [];
+        let dpsFundBalance = 0;
+
+        // আপনার ছবির মতো সঠিক ডাটাবেজ পাথ
+        db.collection('dps_fund_info').doc('main_balance').onSnapshot(doc => {
+            if(doc.exists) {
+                dpsFundBalance = Number(doc.data().balance) || 0;
+                console.log("ফান্ড লোড হয়েছে: ", dpsFundBalance);
+            }
+        });
+
+        async function searchMember() {
+            const id = document.getElementById('search-id').value.trim();
+            const snap = await db.collection('users').where('memberId', '==', id).get();
+            if(snap.empty) { alert("সদস্য পাওয়া যায়নি!"); return; }
+            const user = snap.docs[0].data();
+            const uid = snap.docs[0].id;
+            document.getElementById('m-name').innerText = user.fullName;
+            document.getElementById('m-uid').value = uid;
+            document.getElementById('member-display').style.display = 'block';
+            fetchMemberDps(uid);
+        }
+
+        async function fetchMemberDps(uid) {
+            const snap = await db.collection('dps_accounts').where('uid', '==', uid).where('status', '==', 'active').get();
+            const select = document.getElementById('dps-select');
+            select.innerHTML = '<option value="" disabled selected>নির্বাচন করুন</option>';
+            if(snap.empty) { alert("অ্যাক্টিভ DPS নেই!"); return; }
+            activeDpsList = [];
+            snap.forEach(doc => {
+                activeDpsList.push({ id: doc.id, ...doc.data() });
+                select.innerHTML += `<option value="${doc.id}">${doc.data().dpsNo}</option>`;
+            });
+            document.getElementById('payment-form').style.display = 'block';
+        }
+
+        function updateInstallment() {
+            const dps = activeDpsList.find(a => a.id === document.getElementById('dps-select').value);
+            document.getElementById('pay-monthly').value = dps.monthlyAmount;
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            const m = Number(document.getElementById('pay-monthly').value) || 0;
+            const l = Number(document.getElementById('pay-late').value) || 0;
+            const a = Number(document.getElementById('pay-adv').value) || 0;
+            document.getElementById('total-display').innerText = "৳ " + (m + l + a).toFixed(2);
+        }
+
+        async function processDeposit() {
+            const dpsId = document.getElementById('dps-select').value;
+            const totalText = document.getElementById('total-display').innerText.replace('৳ ', '');
+            const total = Number(totalText);
+            const uid = document.getElementById('m-uid').value;
+
+            if(!dpsId || total <= 0) { alert("সব তথ্য সঠিক দিন!"); return; }
+            if(dpsFundBalance < total) { alert("ফান্ডে পর্যাপ্ত টাকা নেই!"); return; }
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true; btn.innerText = "প্রসেসিং...";
+
+            const dps = activeDpsList.find(a => a.id === dpsId);
+            const batch = db.batch();
+
+            try {
+                // ১. পেমেন্ট রেকর্ড (Approved)
+                const payRef = db.collection('dps_payments').doc();
+                const payData = {
+                    uid: uid, dpsAccountId: dpsId, dpsNo: dps.dpsNo, memberName: dps.memberName,
+                    totalPaid: total, method: document.getElementById('pay-method').value,
+                    status: 'approved', createdAt: new Date().toISOString()
+                };
+                batch.set(payRef, payData);
+
+                // ২. সদস্যের DPS একাউন্ট আপডেট
+                const dpsRef = db.collection('dps_accounts').doc(dpsId);
+                batch.update(dpsRef, {
+                    totalPaidAmount: firebase.firestore.FieldValue.increment(total),
+                    paidInstallments: firebase.firestore.FieldValue.increment(1)
+                });
+
+                // ৩. ফান্ড থেকে টাকা কমানো
+                const fundRef = db.collection('dps_fund_info').doc('main_balance');
+                batch.update(fundRef, { balance: firebase.firestore.FieldValue.increment(-total) });
+
+                // ৪. নতুন যুক্ত করা অংশ: ফান্ড লেজার স্টেটমেন্টে রেকর্ড রাখা
+                const ledgerRef = db.collection('dps_fund_ledger').doc();
+                batch.set(ledgerRef, {
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    dateStr: new Date().toISOString().split('T')[0], // ফিল্টারের জন্য
+                    amount: total,
+                    type: 'debit', // যেহেতু ফান্ড থেকে কমে যাচ্ছে
+                    note: `DPS জমা: ${dps.memberName} (${dps.dpsNo})`,
+                    balanceAfter: dpsFundBalance - total
+                });
+
+                // ৫. সদস্যের ব্যক্তিগত স্টেটমেন্ট
+                const stmtRef = db.collection('statements').doc();
+                batch.set(stmtRef, {
+                    uid: uid, title: "DPS কিস্তি জমা", dpsNo: dps.dpsNo, amount: total,
+                    type: 'credit', category: 'DPS', date: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                await batch.commit();
+                
+                // স্লিপ আপডেট ও দেখানো
+                document.getElementById('s-name').innerText = dps.memberName;
+                document.getElementById('s-dpsno').innerText = dps.dpsNo;
+                document.getElementById('s-total').innerText = total;
+                document.getElementById('s-date').innerText = new Date().toLocaleDateString('bn-BD');
+                document.getElementById('slip-modal').style.display = 'flex';
+
+            } catch (e) { alert("ত্রুটি: " + e.message); btn.disabled = false; }
+        }
+
+        function downloadPNG() {
+            const area = document.getElementById('slip-to-png');
+            html2canvas(area).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'DPS_Slip.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        }
+    </script>
+</body>
+</html>

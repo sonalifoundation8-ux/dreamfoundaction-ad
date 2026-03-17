@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>সদস্যের জন্য DPS ওপেন - অ্যাডমিন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- HTML2PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f4f6f9; color: #333; }
+        
+        .header { background: #1e272e; color: #d4af37; padding: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .container { padding: 20px; max-width: 500px; margin: auto; }
+
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-bottom: 3px solid #d4af37; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
+        
+        .search-group { display: flex; gap: 10px; }
+        .btn-search { background: #d4af37; color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+        #member-info { background: #fdf5e6; padding: 15px; border-radius: 10px; display: none; margin-bottom: 20px; border: 1px dashed #d4af37; }
+        
+        .summary-box { background: #1e272e; color: white; padding: 15px; border-radius: 10px; margin-top: 15px; }
+        .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid #333; }
+        .summary-row:last-child { border-bottom: none; font-size: 15px; font-weight: bold; color: #d4af37; }
+
+        .btn-confirm { width: 100%; padding: 15px; background: #27ae60; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3); }
+
+        /* Document Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .doc-card { background: white; width: 95%; max-width: 450px; border-radius: 10px; padding: 0; overflow: hidden; position: relative; }
+        .doc-header { background: #fdf5e6; padding: 25px; text-align: center; border-bottom: 2px dashed #d4af37; }
+        .doc-header h2 { color: #d4af37; font-size: 22px; }
+        .doc-body { padding: 20px; font-size: 14px; }
+        .doc-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f1f1; }
+        .doc-row b { color: #333; }
+        .doc-footer { padding: 15px; background: #f9f9f9; text-align: center; display: flex; gap: 10px; }
+        .btn-dl { flex: 1; padding: 12px; background: #2980b9; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-cls { flex: 1; padding: 12px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2><i class="fa-solid fa-folder-plus"></i> সরাসরি DPS ওপেন করুন</h2>
+    </div>
+
+    <div class="container">
+        <!-- ১. সদস্য সার্চ -->
+        <div class="card">
+            <div class="form-group">
+                <label>সদস্য আইডি (Member ID)</label>
+                <div class="search-group">
+                    <input type="text" id="search-id" class="form-control" placeholder="যেমন: SF-001">
+                    <button class="btn-search" onclick="searchMember()"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+            <div id="member-info">
+                <h4 id="m-name">সদস্যের নাম</h4>
+                <p>আইডি: <b id="m-id">---</b> | মোবাইল: <b id="m-phone">---</b></p>
+                <input type="hidden" id="m-uid">
+            </div>
+        </div>
+
+        <!-- ২. DPS ফরম -->
+        <div class="card" id="dps-form" style="display:none;">
+            <div class="form-group">
+                <label>ওপেন করার তারিখ</label>
+                <input type="date" id="open-date" class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label>মেয়াদ নির্বাচন করুন</label>
+                <select id="dps-years" class="form-control" onchange="calculateDPS()">
+                    <option value="" disabled selected>বছর সিলেক্ট করুন</option>
+                    <!-- ১ থেকে ১২ বছর অটো জেনারেট হবে -->
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>মাসিক জমার পরিমাণ (৳)</label>
+                <input type="number" id="monthly-amount" class="form-control" placeholder="যেমন: ১০০০" oninput="calculateDPS()">
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-row"><span>লভ্যাংশ হার:</span> <span id="s-rate">0%</span></div>
+                <div class="summary-row"><span>বিলম্ব ফি (মাসিক):</span> <span id="s-latefee">0 ৳</span></div>
+                <div class="summary-row"><span>মোট আসল জমা:</span> <span id="s-deposit">0 ৳</span></div>
+                <div class="summary-row"><span>মোট লাভ:</span> <span id="s-profit">0 ৳</span></div>
+                <div class="summary-row"><span>সর্বমোট (মেয়াদ শেষে):</span> <span id="s-total">0 ৳</span></div>
+            </div>
+
+            <button class="btn-confirm" id="submit-btn" onclick="confirmOpenDPS()">DPS নিশ্চিত করুন</button>
+        </div>
+    </div>
+
+    <!-- ৩. ডিজিটাল ডকুমেন্ট মোডাল -->
+    <div id="doc-modal" class="modal-overlay">
+        <div class="doc-card" id="doc-to-pdf">
+            <div class="doc-header">
+                <h2>ড্রিম ফাউন্ডেশন</h2>
+                <p>ডিজিটাল DPS সার্টিফিকেট</p>
+                <h3 id="doc-dpsno" style="margin-top: 10px; color: #1e272e;">DPS-NO: ---</h3>
+            </div>
+            <div class="doc-body">
+                <div class="doc-row"><p>সদস্যের নাম:</p> <b id="doc-name">---</b></div>
+                <div class="doc-row"><p>সদস্য আইডি:</p> <b id="doc-id">---</b></div>
+                <div class="doc-row"><p>মেয়াদ:</p> <b id="doc-years">---</b></div>
+                <div class="doc-row"><p>মাসিক জমা:</p> <b id="doc-monthly">0 ৳</b></div>
+                <div class="doc-row"><p>লভ্যাংশ হার:</p> <b id="doc-rate">0%</b></div>
+                <div class="doc-row"><p>ওপেন করার তারিখ:</p> <b id="doc-open">---</b></div>
+                <div class="doc-row"><p>মেয়াদ উত্তীর্ণের তারিখ:</p> <b id="doc-mat">---</b></div>
+                <div class="doc-row" style="margin-top:10px; border-top: 2px solid #ddd; padding-top: 10px;">
+                    <p style="font-weight:bold; color:#27ae60;">সর্বমোট প্রাপ্য টাকা:</p> 
+                    <b id="doc-total" style="color:#27ae60; font-size:18px;">0 ৳</b>
+                </div>
+                <p style="font-size: 10px; color: #888; text-align: center; margin-top: 15px;">* এটি একটি সিস্টেম জেনারেটেড ডিজিটাল ডকুমেন্ট।</p>
+            </div>
+            <div class="doc-footer">
+                <button class="btn-dl" onclick="downloadPDF()"><i class="fa-solid fa-download"></i> ডাউনলোড করুন</button>
+                <button class="btn-cls" onclick="location.reload()">বন্ধ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app",
+            messagingSenderId: "167946300872",
+            appId: "1:167946300872:web:bc3c21dbdc5adda5a0a4fd"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let dpsConfig = {};
+
+        // ১. বছর অটো জেনারেশন ও কনফিগ লোড
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('open-date').value = today;
+
+            const yearSelect = document.getElementById('dps-years');
+            for(let i=1; i<=12; i++) {
+                yearSelect.innerHTML += `<option value="${i}">${i} বছর</option>`;
+            }
+
+            db.collection('settings').doc('dpsConfig').get().then(doc => {
+                if(doc.exists) {
+                    dpsConfig = doc.data();
+                    document.getElementById('s-latefee').innerText = (dpsConfig.lateFee || 0) + " ৳";
+                }
+            });
+        });
+
+        // ২. মেম্বার সার্চ
+        async function searchMember() {
+            const searchId = document.getElementById('search-id').value.trim();
+            if(!searchId) return;
+            const snap = await db.collection('users').where('memberId', '==', searchId).get();
+            if(snap.empty) {
+                alert("সদস্য পাওয়া যায়নি!");
+            } else {
+                const user = snap.docs[0].data();
+                document.getElementById('m-name').innerText = user.fullName;
+                document.getElementById('m-id').innerText = user.memberId;
+                document.getElementById('m-phone').innerText = user.phone;
+                document.getElementById('m-uid').value = snap.docs[0].id;
+                document.getElementById('member-info').style.display = 'block';
+                document.getElementById('dps-form').style.display = 'block';
+            }
+        }
+
+        // ৩. অটো ক্যালকুলেশন
+        function calculateDPS() {
+            const years = parseInt(document.getElementById('dps-years').value);
+            const monthly = parseFloat(document.getElementById('monthly-amount').value) || 0;
+            if(!years || monthly <= 0) return;
+
+            const rate = parseFloat(dpsConfig[`year${years}`]) || 0;
+            const totalMonths = years * 12;
+            const totalDeposit = monthly * totalMonths;
+            const totalProfit = monthly * ((totalMonths * (totalMonths + 1)) / 2) * (rate / 1200);
+            const maturityAmount = totalDeposit + totalProfit;
+
+            document.getElementById('s-rate').innerText = rate + "%";
+            document.getElementById('s-deposit').innerText = totalDeposit.toFixed(2) + " ৳";
+            document.getElementById('s-profit').innerText = totalProfit.toFixed(2) + " ৳";
+            document.getElementById('s-total').innerText = maturityAmount.toFixed(2) + " ৳";
+        }
+
+        // ৪. কনফার্মেশন ও ডকুমেন্ট জেনারেশন
+        async function confirmOpenDPS() {
+            const uid = document.getElementById('m-uid').value;
+            const years = parseInt(document.getElementById('dps-years').value);
+            const monthly = parseFloat(document.getElementById('monthly-amount').value);
+            if(!years || !monthly) { alert("তথ্য অসম্পূর্ণ!"); return; }
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerText = "অপেক্ষা করুন...";
+
+            try {
+                let generatedDpsNo = "";
+                await db.runTransaction(async (transaction) => {
+                    const counterRef = db.collection('settings').doc('dpsCounter');
+                    const counterDoc = await transaction.get(counterRef);
+                    let newSerial = (counterDoc.exists ? counterDoc.data().lastSerial : 0) + 1;
+                    generatedDpsNo = "DPS-NO:" + String(newSerial).padStart(3, '0');
+
+                    const openDate = new Date(document.getElementById('open-date').value);
+                    const matDate = new Date(openDate);
+                    matDate.setFullYear(openDate.getFullYear() + years);
+
+                    const dpsRef = db.collection('dps_accounts').doc();
+                    transaction.set(dpsRef, {
+                        uid: uid,
+                        memberName: document.getElementById('m-name').innerText,
+                        dpsNo: generatedDpsNo,
+                        years: years,
+                        monthlyAmount: monthly,
+                        profitRate: parseFloat(document.getElementById('s-rate').innerText),
+                        totalDeposit: monthly * years * 12,
+                        maturityAmount: parseFloat(document.getElementById('s-total').innerText),
+                        openDate: openDate,
+                        maturityDate: matDate.toISOString(),
+                        status: 'active',
+                        paidInstallments: 0,
+                        totalPaidAmount: 0,
+                        lateFee: dpsConfig.lateFee || 50,
+                        dueDay: dpsConfig.dueDay || 10
+                    });
+                    transaction.set(counterRef, { lastSerial: newSerial }, { merge: true });
+                });
+
+                // ডকুমেন্ট মোডালে তথ্য বসানো
+                document.getElementById('doc-dpsno').innerText = generatedDpsNo;
+                document.getElementById('doc-name').innerText = document.getElementById('m-name').innerText;
+                document.getElementById('doc-id').innerText = document.getElementById('m-id').innerText;
+                document.getElementById('doc-years').innerText = years + " বছর";
+                document.getElementById('doc-monthly').innerText = monthly + " ৳";
+                document.getElementById('doc-rate').innerText = document.getElementById('s-rate').innerText;
+                document.getElementById('doc-open').innerText = document.getElementById('open-date').value;
+                document.getElementById('doc-total').innerText = document.getElementById('s-total').innerText;
+                
+                document.getElementById('doc-modal').style.display = 'flex';
+
+            } catch (e) {
+                alert("ত্রুটি: " + e.message);
+                btn.disabled = false;
+            }
+        }
+
+        // ৫. PDF ডাউনলোড ফাংশন
+        function downloadPDF() {
+            const element = document.getElementById('doc-to-pdf');
+            const btns = document.querySelector('.doc-footer');
+            btns.style.display = 'none'; // ডাউনলোডের সময় বাটন লুকানো
+
+            const opt = {
+                margin: 0.5,
+                filename: 'DPS_Certificate_' + document.getElementById('doc-dpsno').innerText + '.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3 },
+                jsPDF: { unit: 'in', format: 'a5', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                btns.style.display = 'flex';
+            });
+        }
+    </script>
+</body>
+</html>

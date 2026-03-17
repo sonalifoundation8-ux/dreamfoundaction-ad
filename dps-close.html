@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPS একাউন্ট ক্লোজ - অ্যাডমিন</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Noto Sans Bengali', sans-serif; }
+        body { background-color: #f4f6f9; color: #333; }
+        
+        .header { background: #1e272e; color: #d4af37; padding: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .container { padding: 20px; max-width: 500px; margin: auto; }
+
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-bottom: 3px solid #d4af37; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
+        
+        .search-group { display: flex; gap: 10px; }
+        .btn-gold { background: #d4af37; color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+        /* DPS Details Card */
+        .details-card { background: #1e272e; color: white; padding: 20px; border-radius: 15px; display: none; }
+        .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; font-size: 13px; }
+        .detail-row span { color: #d4af37; font-weight: bold; }
+        
+        .btn-close-req { width: 100%; padding: 15px; background: #e74c3c; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+
+        /* Verify Modal */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 350px; padding: 25px; border-radius: 15px; text-align: center; }
+        .btn-verify { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2><i class="fa-solid fa- some-box-archive"></i> DPS একাউন্ট ক্লোজ প্যানেল</h2>
+    </div>
+
+    <div class="container">
+        <!-- ১. সদস্য সার্চ -->
+        <div class="card">
+            <div class="form-group">
+                <label>সদস্য আইডি দিয়ে খুঁজুন</label>
+                <div class="search-group">
+                    <input type="text" id="member-id" class="form-control" placeholder="যেমন: SF-001">
+                    <button class="btn-gold" onclick="searchMember()"><i class="fa-solid fa-search"></i></button>
+                </div>
+            </div>
+            <div id="dps-select-group" style="display:none;">
+                <label style="font-size:12px; font-weight:bold;">DPS নম্বর নির্বাচন করুন</label>
+                <select id="dps-select" class="form-control" onchange="showDpsDetails()"></select>
+            </div>
+        </div>
+
+        <!-- ২. বিস্তারিত তথ্য কার্ড -->
+        <div class="details-card" id="details-card">
+            <h3 style="text-align:center; color:#d4af37; margin-bottom:15px;">DPS তথ্য বিবরণী</h3>
+            <div class="detail-row"><p>সদস্যের নাম:</p> <span id="d-name">---</span></div>
+            <div class="detail-row"><p>শুরু হওয়ার তারিখ:</p> <span id="d-open">---</span></div>
+            <div class="detail-row"><p>মেয়াদ শেষ হওয়ার তারিখ:</p> <span id="d-maturity">---</span></div>
+            <div class="detail-row"><p>কিস্তির পরিমাণ:</p> <span id="d-monthly">0 ৳</span></div>
+            <div class="detail-row"><p>মোট বকেয়া টাকা:</p> <span id="d-due" style="color:#ff4d4d;">0 ৳</span></div>
+            <div class="detail-row" style="background:rgba(212,175,55,0.1); padding:10px; margin-top:10px; border-radius:5px;">
+                <p style="font-weight:bold;">মোট জমা টাকা (রিফান্ড হবে):</p> 
+                <span id="d-paid" style="font-size:18px;">0 ৳</span>
+            </div>
+
+            <button class="btn-close-req" onclick="sendClosureCode()">ক্লোজ রিকোয়েস্ট পাঠান</button>
+        </div>
+    </div>
+
+    <!-- ৩. ভেরিফিকেশন মোডাল -->
+    <div class="modal" id="verify-modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:10px;">কোড যাচাই করুন</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">সদস্যের নোটিফিকেশনে পাঠানো ৬ ডিজিটের ক্লোজ কোডটি এখানে লিখুন।</p>
+            <input type="text" id="input-code" class="form-control" placeholder="------" maxlength="6" style="text-align:center; font-size:20px; letter-spacing:5px;">
+            <button class="btn-verify" onclick="finalCloseDps()">একাউন্ট চিরতরে ক্লোজ করুন</button>
+            <button style="margin-top:10px; background:none; border:none; color:red; cursor:pointer;" onclick="closeModal()">বাতিল করুন</button>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsXATdEEYbgLUVjR3yqexy_JtuQ6I6mMo",
+            authDomain: "sonali-fundation.firebaseapp.com",
+            projectId: "sonali-fundation",
+            storageBucket: "sonali-fundation.firebasestorage.app"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentUid = null;
+        let selectedDps = null;
+        let generatedCode = "";
+
+        // ১. সদস্য সার্চ
+        async function searchMember() {
+            const mId = document.getElementById('member-id').value.trim();
+            const snap = await db.collection('users').where('memberId', '==', mId).get();
+            if(snap.empty) { alert("সদস্য পাওয়া যায়নি!"); return; }
+
+            currentUid = snap.docs[0].id;
+            const dpsSnap = await db.collection('dps_accounts').where('uid', '==', currentUid).where('status', '==', 'active').get();
+            
+            const select = document.getElementById('dps-select');
+            select.innerHTML = '<option value="" disabled selected>সিলেক্ট করুন</option>';
+            
+            if(dpsSnap.empty) { alert("এই সদস্যের কোনো একটিভ DPS নেই।"); return; }
+
+            dpsSnap.forEach(doc => {
+                select.innerHTML += `<option value='${JSON.stringify({id: doc.id, ...doc.data()})}'>${doc.data().dpsNo}</option>`;
+            });
+            document.getElementById('dps-select-group').style.display = 'block';
+        }
+
+        // ২. বিস্তারিত তথ্য দেখানো
+        function showDpsDetails() {
+            selectedDps = JSON.parse(document.getElementById('dps-select').value);
+            document.getElementById('d-name').innerText = selectedDps.memberName;
+            document.getElementById('d-open').innerText = new Date(selectedDps.openDate.seconds * 1000).toLocaleDateString('bn-BD');
+            document.getElementById('d-maturity').innerText = new Date(selectedDps.maturityDate).toLocaleDateString('bn-BD');
+            document.getElementById('d-monthly').innerText = selectedDps.monthlyAmount + " ৳";
+            document.getElementById('d-paid').innerText = (selectedDps.totalPaidAmount || 0) + " ৳";
+            
+            // বকেয়া হিসাব
+            const totalMonths = selectedDps.years * 12;
+            const remaining = (selectedDps.totalDeposit || 0) - (selectedDps.totalPaidAmount || 0);
+            document.getElementById('d-due').innerText = remaining + " ৳";
+
+            document.getElementById('details-card').style.display = 'block';
+        }
+
+        // ৩. ক্লোজ কোড পাঠানো (সদস্যের নোটিফিকেশনে)
+        async function sendClosureCode() {
+            generatedCode = Math.floor(100000 + Math.random() * 900000).toString(); // ৬ ডিজিটের কোড
+            
+            try {
+                // সদস্যকে নোটিফিকেশন পাঠানো
+                await db.collection('notifications').add({
+                    uid: currentUid,
+                    title: "DPS ক্লোজ রিকোয়েস্ট",
+                    message: `আপনার ${selectedDps.dpsNo} একাউন্টটি ক্লোজ করার অনুরোধ করা হয়েছে। আপনার গোপন ক্লোজ কোডটি হলো: ${generatedCode}`,
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    type: "alert"
+                });
+
+                alert("সদস্যের নোটিফিকেশনে ক্লোজ কোডটি পাঠানো হয়েছে। সদস্যের কাছ থেকে কোডটি সংগ্রহ করুন।");
+                document.getElementById('verify-modal').style.display = 'flex';
+            } catch (e) { alert("সমস্যা হয়েছে: " + e.message); }
+        }
+
+        // ৪. ফাইনাল ক্লোজ (ডাটা ডিলিট এবং ফান্ডে টাকা জমা)
+        async function finalCloseDps() {
+            const inputCode = document.getElementById('input-code').value;
+            if(inputCode !== generatedCode) { alert("ভুল কোড! আবার চেষ্টা করুন।"); return; }
+
+            if(!confirm("আপনি কি নিশ্চিতভাবে এই একাউন্টটি ক্লোজ করতে চান? এরপর সব ডাটা ডিলিট হয়ে যাবে।")) return;
+
+            const totalRefund = Number(selectedDps.totalPaidAmount || 0);
+            const batch = db.batch();
+
+            try {
+                // ১. DPS ডাটা ডিলিট করা
+                const dpsRef = db.collection('dps_accounts').doc(selectedDps.id);
+                batch.delete(dpsRef);
+
+                // ২. অ্যাডমিন ফান্ডে টাকা ফেরত আনা (main_balance এ জমা হবে)
+                const fundRef = db.collection('dps_fund_info').doc('main_balance');
+                batch.update(fundRef, {
+                    balance: firebase.firestore.FieldValue.increment(totalRefund)
+                });
+
+                // ৩. ফান্ড লেজারে স্টেটমেন্ট রেকর্ড
+                const ledgerRef = db.collection('dps_fund_ledger').doc();
+                batch.set(ledgerRef, {
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    dateStr: new Date().toISOString().split('T')[0],
+                    amount: totalRefund,
+                    type: 'credit',
+                    note: `DPS ক্লোজ রিফান্ড: ${selectedDps.memberName} (${selectedDps.dpsNo})`,
+                    balanceAfter: (await db.collection('dps_fund_info').doc('main_balance').get()).data().balance + totalRefund
+                });
+
+                await batch.commit();
+                alert("একাউন্টটি সফলভাবে ক্লোজ করা হয়েছে এবং টাকা ফান্ডে জমা হয়েছে।");
+                location.reload();
+            } catch (e) { alert("এরর: " + e.message); }
+        }
+
+        function closeModal() { document.getElementById('verify-modal').style.display = 'none'; }
+    </script>
+</body>
+</html>
