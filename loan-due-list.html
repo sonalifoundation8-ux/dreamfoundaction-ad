@@ -83,6 +83,7 @@
             padding: 15px; border: 2px solid var(--gold); border-radius: 20px;
             background: #fffdf5; margin-bottom: 20px; gap: 10px;
         }
+        .f-side { display: flex; align-items: center; gap: 8px; }
         .f-logo { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--gold); }
         .id-tag { background: var(--dark); color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
         .m-photo-sm { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--gold); }
@@ -93,8 +94,8 @@
         .sum-box h3 { font-size: 14px; color: var(--dark); font-weight: 800; }
 
         /* Table */
-        .table-box { width: 100%; overflow-x: hidden; }
-        .statement-table { width: 100%; border-collapse: collapse; }
+        .table-box { width: 100%; overflow-x: auto; }
+        .statement-table { width: 100%; border-collapse: collapse; min-width: 400px; }
         .statement-table th { background: #f1f1f1; padding: 10px 2px; font-size: 11px; text-align: center; border-bottom: 2px solid #ddd; }
         .statement-table td { padding: 10px 2px; font-size: 11px; border-bottom: 1px solid #eee; text-align: center; }
         
@@ -178,7 +179,7 @@
                                 <h4>${d.fullName}</h4>
                                 <p>ID: ${d.memberId} | <i class="fa-solid fa-phone"></i> ${d.phone}</p>
                                 <div class="loan-stats">
-                                    <span>অনুমোদিত: ৳ ${d.loanRepaid + d.loanDue}</span>
+                                    <span>অনুমোদিত: ৳ ${(d.loanRepaid || 0) + (d.loanDue || 0)}</span>
                                     <span class="due-amt">বকেয়া: ৳ ${d.loanDue}</span>
                                 </div>
                             </div>
@@ -187,32 +188,53 @@
                     `;
                 });
                 area.innerHTML = html;
+            }, error => {
+                console.error("Error loading list:", error);
+                document.getElementById('due-list-area').innerHTML = '<p style="text-align:center; color:red;">ডাটা লোড করতে সমস্যা হয়েছে।</p>';
             });
         }
 
-        // ২. বিস্তারিত পপআপ (সদস্য প্যানেল স্টাইল)
+        // ২. বিস্তারিত পপআপ
         async function openDetails(uid) {
             const member = allDueMembers.find(m => m.uid === uid);
+            if(!member) return;
+
             document.getElementById('detailModal').style.display = 'block';
             const modalBody = document.getElementById('modal-content');
-            modalBody.innerHTML = '<p style="text-align:center;">হিসাব তৈরি হচ্ছে...</p>';
+            modalBody.innerHTML = '<div class="loader"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i><br>হিসাব তৈরি হচ্ছে...</div>';
 
             try {
                 // লোন ডাটা ও ট্রানজেকশন আনা
-                const loanSnap = await db.collection('loan_applications').where('uid', '==', uid).where('status', '==', 'approved').get();
-                const txSnap = await db.collection('loan_transactions').where('uid', '==', uid).where('type', '==', 'repayment').get();
+                const loanSnap = await db.collection('loan_applications')
+                                    .where('uid', '==', uid)
+                                    .where('status', '==', 'approved')
+                                    .get();
+
+                if(loanSnap.empty) {
+                    modalBody.innerHTML = '<p style="text-align:center; padding:20px;">এই সদস্যের কোনো অনুমোদিত লোন রেকর্ড পাওয়া যায়নি।</p>';
+                    return;
+                }
+
+                const txSnap = await db.collection('loan_transactions')
+                                    .where('uid', '==', uid)
+                                    .where('type', '==', 'repayment')
+                                    .get();
                 
                 let loans = [];
                 loanSnap.forEach(d => loans.push(d.data()));
-                loans.sort((a,b) => b.timestamp - a.timestamp);
+                
+                // সময় অনুযায়ী লোনটি বাছাই করা
+                loans.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 const loan = loans[0];
                 const paidCount = txSnap.size;
 
                 // ক্যালকুলেশন
-                const amount = Number(loan.loanAmount);
-                const months = Number(loan.durationMonths);
-                const rule = loan.repaymentRule;
-                const totalInterest = (amount * Number(loan.interestRate) / 100) * (months / 12);
+                const amount = Number(loan.loanAmount) || 0;
+                const months = Number(loan.durationMonths) || 0;
+                const rule = loan.repaymentRule || "মাসিক";
+                const interestRate = Number(loan.interestRate) || 0;
+                
+                const totalInterest = (amount * interestRate / 100) * (months / 12);
                 const totalRepayable = amount + totalInterest;
 
                 let totalInstCount = months;
@@ -225,6 +247,7 @@
                 // টেবিল জেনারেট
                 let tableHtml = '';
                 const startDate = loan.timestamp ? loan.timestamp.toDate() : new Date();
+                
                 for (let i = 1; i <= totalInstCount; i++) {
                     const instDate = new Date(startDate);
                     instDate.setDate(startDate.getDate() + (i * dayGap));
@@ -244,14 +267,17 @@
 
                 modalBody.innerHTML = `
                     <div class="header-card">
-                        <div class="f-side"><img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" class="f-logo"><div><h2 style="font-size:15px; color:var(--gold-dark);">সোনালী ফাউন্ডেশন</h2></div></div>
+                        <div class="f-side">
+                            <img src="https://i.ibb.co/Zzxz62P/user-placeholder.png" class="f-logo">
+                            <div><h2 style="font-size:15px; color:var(--gold-dark);">সোনালী ফাউন্ডেশন</h2></div>
+                        </div>
                         <div class="mid-id"><div class="id-tag">${member.memberId}</div></div>
-                        <div class="m-side"><img src="${member.photoUrl}" class="m-photo-sm"></div>
+                        <div class="m-side"><img src="${member.photoUrl || 'https://i.ibb.co/Zzxz62P/user-placeholder.png'}" class="m-photo-sm"></div>
                     </div>
                     <div class="sum-row">
                         <div class="sum-box"><p>মোট লোন</p><h3>৳ ${totalRepayable.toFixed(0)}</h3></div>
-                        <div class="sum-box"><p>পরিশোধিত</p><h3 style="color:var(--green);">৳ ${member.loanRepaid.toFixed(0)}</h3></div>
-                        <div class="sum-box"><p>বাকি লোন</p><h3 style="color:var(--red);">৳ ${member.loanDue.toFixed(0)}</h3></div>
+                        <div class="sum-box"><p>পরিশোধিত</p><h3 style="color:var(--green);">৳ ${(member.loanRepaid || 0).toFixed(0)}</h3></div>
+                        <div class="sum-box"><p>বাকি লোন</p><h3 style="color:var(--red);">৳ ${(member.loanDue || 0).toFixed(0)}</h3></div>
                     </div>
                     <div class="table-box">
                         <table class="statement-table">
@@ -260,7 +286,10 @@
                         </table>
                     </div>
                 `;
-            } catch (e) { modalBody.innerHTML = 'ত্রুটি: লোন ডাটা পাওয়া যায়নি।'; }
+            } catch (e) { 
+                console.error("Error fetching details:", e);
+                modalBody.innerHTML = '<p style="text-align:center; color:red; padding:20px;">ত্রুটি: লোন ডাটা প্রসেস করা যায়নি। ব্রাউজার কনসোল চেক করুন।</p>'; 
+            }
         }
 
         function filterList() {
@@ -273,7 +302,9 @@
         }
 
         function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
-        loadDueList();
+        
+        // পেজ লোড হলে লিস্ট চালু করা
+        window.onload = loadDueList;
     </script>
 </body>
 </html>
